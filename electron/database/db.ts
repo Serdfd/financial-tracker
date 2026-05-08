@@ -11,7 +11,6 @@ let db: any
 const getDbPath = () => path.join(app.getPath('userData'), 'financial-tracker.db')
 
 export async function initDatabase(): Promise<any> {
-  // Apuntar al archivo WASM en node_modules
   const wasmPath = path.join(app.getAppPath(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm')
 
   const SQL = await initSqlJs({
@@ -28,6 +27,7 @@ export async function initDatabase(): Promise<any> {
   }
 
   crearTablas()
+  migraciones()
   insertarSemilla()
   guardarDb()
 
@@ -73,6 +73,7 @@ function crearTablas() {
       nombre TEXT NOT NULL,
       tipo TEXT NOT NULL,
       color TEXT DEFAULT '#6366f1',
+      emoji TEXT DEFAULT '',
       activo INTEGER DEFAULT 1
     );
 
@@ -170,11 +171,84 @@ function crearTablas() {
       fecha_entrega_estimada TEXT,
       estado TEXT DEFAULT 'en_construccion'
     );
+
+    CREATE TABLE IF NOT EXISTS fichas_inversion (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      inversion_id INTEGER NOT NULL UNIQUE REFERENCES inversiones(id),
+      -- CDT
+      tasa_ea REAL,
+      fecha_vencimiento TEXT,
+      plazo_dias INTEGER,
+      monto_inicial REAL,
+      -- Acciones
+      num_acciones REAL,
+      precio_promedio REAL,
+      mercado TEXT,
+      ticker TEXT,
+      -- Crypto
+      cantidad_tokens REAL,
+      token_symbol TEXT,
+      precio_promedio_crypto REAL
+    );
+
+    CREATE TABLE IF NOT EXISTS lotes_inversion (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      inversion_id INTEGER NOT NULL REFERENCES inversiones(id),
+      fecha_compra TEXT NOT NULL,
+      cantidad REAL NOT NULL,
+      precio_unitario REAL NOT NULL,
+      comision REAL DEFAULT 0,
+      nota TEXT
+    );
+  `)
+}
+
+// Migraciones para bases de datos existentes
+function migraciones() {
+  // Migración: agregar columna emoji a categorias si no existe
+  const infoCat = db.exec("PRAGMA table_info(categorias)")
+  if (infoCat.length) {
+    const columnas = infoCat[0].values.map((row: any[]) => row[1])
+    if (!columnas.includes('emoji')) {
+      db.run("ALTER TABLE categorias ADD COLUMN emoji TEXT DEFAULT ''")
+    }
+  }
+
+  // Migración: crear tabla fichas_inversion si no existe (ya está en crearTablas,
+  // pero para DBs que ya existían antes de esta versión)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS fichas_inversion (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      inversion_id INTEGER NOT NULL UNIQUE REFERENCES inversiones(id),
+      tasa_ea REAL,
+      fecha_vencimiento TEXT,
+      plazo_dias INTEGER,
+      monto_inicial REAL,
+      num_acciones REAL,
+      precio_promedio REAL,
+      mercado TEXT,
+      ticker TEXT,
+      cantidad_tokens REAL,
+      token_symbol TEXT,
+      precio_promedio_crypto REAL
+    )
+  `)
+
+  // Migración: crear tabla lotes_inversion
+  db.run(`
+    CREATE TABLE IF NOT EXISTS lotes_inversion (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      inversion_id INTEGER NOT NULL REFERENCES inversiones(id),
+      fecha_compra TEXT NOT NULL,
+      cantidad REAL NOT NULL,
+      precio_unitario REAL NOT NULL,
+      comision REAL DEFAULT 0,
+      nota TEXT
+    )
   `)
 }
 
 function insertarSemilla() {
-  // Solo insertar si las tablas están vacías
   const monedas = db.exec('SELECT COUNT(*) as cnt FROM monedas')
   const cnt = monedas[0]?.values[0][0] as number
   if (cnt > 0) return
@@ -197,21 +271,21 @@ function insertarSemilla() {
       ('Crypto'),
       ('Inmueble');
 
-    INSERT INTO categorias (nombre, tipo, color) VALUES
-      ('Salario', 'ingreso', '#22c55e'),
-      ('Bono', 'ingreso', '#10b981'),
-      ('Rendimientos', 'ingreso', '#06b6d4'),
-      ('Arriendo', 'ingreso', '#3b82f6'),
-      ('Otros ingresos', 'ingreso', '#8b5cf6'),
-      ('Vivienda', 'gasto', '#ef4444'),
-      ('Servicios', 'gasto', '#f97316'),
-      ('Alimentación', 'gasto', '#eab308'),
-      ('Transporte', 'gasto', '#84cc16'),
-      ('Auto', 'gasto', '#14b8a6'),
-      ('Salud', 'gasto', '#06b6d4'),
-      ('Entretenimiento', 'gasto', '#8b5cf6'),
-      ('Ropa', 'gasto', '#ec4899'),
-      ('Impuestos', 'gasto', '#f43f5e'),
-      ('Otros gastos', 'gasto', '#94a3b8');
+    INSERT INTO categorias (nombre, tipo, color, emoji) VALUES
+      ('Salario', 'ingreso', '#22c55e', '💰'),
+      ('Bono', 'ingreso', '#10b981', '🎁'),
+      ('Rendimientos', 'ingreso', '#06b6d4', '📈'),
+      ('Arriendo', 'ingreso', '#3b82f6', '🏠'),
+      ('Otros ingresos', 'ingreso', '#8b5cf6', '💵'),
+      ('Vivienda', 'gasto', '#ef4444', '🏠'),
+      ('Servicios', 'gasto', '#f97316', '💡'),
+      ('Alimentación', 'gasto', '#eab308', '🛒'),
+      ('Transporte', 'gasto', '#84cc16', '🚌'),
+      ('Auto', 'gasto', '#14b8a6', '🚗'),
+      ('Salud', 'gasto', '#06b6d4', '🏥'),
+      ('Entretenimiento', 'gasto', '#8b5cf6', '🎬'),
+      ('Ropa', 'gasto', '#ec4899', '👕'),
+      ('Impuestos', 'gasto', '#f43f5e', '🏛️'),
+      ('Otros gastos', 'gasto', '#94a3b8', '📦');
   `)
 }

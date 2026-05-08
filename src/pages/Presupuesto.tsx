@@ -67,6 +67,10 @@ export function Presupuesto() {
     cargar()
   }
 
+  // Mejora 3: validación
+  const fijoValido = !!(editandoFijo.nombre && editandoFijo.nombre.trim() && editandoFijo.monto && editandoFijo.monto > 0 && editandoFijo.categoria_id)
+  const variableValido = !!(editandoVariable.nombre && editandoVariable.nombre.trim() && editandoVariable.tope_mensual && editandoVariable.tope_mensual > 0 && editandoVariable.categoria_id)
+
   const totalFijos = fijos.reduce((s, f) => s + f.monto, 0)
   const totalVariablesTope = variables.reduce((s, v) => s + v.tope_mensual, 0)
 
@@ -233,27 +237,27 @@ export function Presupuesto() {
       <Modal open={modalFijo} onClose={() => setModalFijo(false)} titulo={editandoFijo.id ? 'Editar Gasto Fijo' : 'Nuevo Gasto Fijo'}>
         <div className="space-y-4">
           <div>
-            <label className="text-slate-400 text-sm block mb-1">Nombre *</label>
+            <label className="text-slate-400 text-sm block mb-1">Nombre <span className="text-red-400">*</span></label>
             <input value={editandoFijo.nombre || ''} placeholder="Ej: Arriendo"
               onChange={e => setEditandoFijo(p => ({ ...p, nombre: e.target.value }))} />
           </div>
           <div>
-            <label className="text-slate-400 text-sm block mb-1">Categoría</label>
+            <label className="text-slate-400 text-sm block mb-1">Categoría <span className="text-red-400">*</span></label>
             <select value={editandoFijo.categoria_id || ''}
               onChange={e => setEditandoFijo(p => ({ ...p, categoria_id: Number(e.target.value) }))}>
-              <option value="">Sin categoría</option>
-              {categoriasGasto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              <option value="">Seleccionar categoría</option>
+              {categoriasGasto.map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-slate-400 text-sm block mb-1">Monto mensual *</label>
+            <label className="text-slate-400 text-sm block mb-1">Monto mensual <span className="text-red-400">*</span></label>
             <input type="number" value={editandoFijo.monto || ''} placeholder="0"
               onChange={e => setEditandoFijo(p => ({ ...p, monto: Number(e.target.value) }))} />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setModalFijo(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
-            <button onClick={guardarFijo} disabled={!editandoFijo.nombre || !editandoFijo.monto}
-              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50">
+            <button onClick={guardarFijo} disabled={!fijoValido}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed">
               Guardar
             </button>
           </div>
@@ -264,27 +268,27 @@ export function Presupuesto() {
       <Modal open={modalVariable} onClose={() => setModalVariable(false)} titulo={editandoVariable.id ? 'Editar Gasto Variable' : 'Nuevo Gasto Variable'}>
         <div className="space-y-4">
           <div>
-            <label className="text-slate-400 text-sm block mb-1">Nombre *</label>
+            <label className="text-slate-400 text-sm block mb-1">Nombre <span className="text-red-400">*</span></label>
             <input value={editandoVariable.nombre || ''} placeholder="Ej: Alimentación"
               onChange={e => setEditandoVariable(p => ({ ...p, nombre: e.target.value }))} />
           </div>
           <div>
-            <label className="text-slate-400 text-sm block mb-1">Categoría</label>
+            <label className="text-slate-400 text-sm block mb-1">Categoría <span className="text-red-400">*</span></label>
             <select value={editandoVariable.categoria_id || ''}
               onChange={e => setEditandoVariable(p => ({ ...p, categoria_id: Number(e.target.value) }))}>
-              <option value="">Sin categoría</option>
-              {categoriasGasto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              <option value="">Seleccionar categoría</option>
+              {categoriasGasto.map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-slate-400 text-sm block mb-1">Tope mensual *</label>
+            <label className="text-slate-400 text-sm block mb-1">Tope mensual <span className="text-red-400">*</span></label>
             <input type="number" value={editandoVariable.tope_mensual || ''} placeholder="0"
               onChange={e => setEditandoVariable(p => ({ ...p, tope_mensual: Number(e.target.value) }))} />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setModalVariable(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
-            <button onClick={guardarVariable} disabled={!editandoVariable.nombre || !editandoVariable.tope_mensual}
-              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50">
+            <button onClick={guardarVariable} disabled={!variableValido}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed">
               Guardar
             </button>
           </div>

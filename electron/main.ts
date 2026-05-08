@@ -3,8 +3,9 @@ import path from 'path'
 import { initDatabase } from './database/db'
 import { getCatalogo, saveCatalogo, deleteCatalogo } from './database/queries/catalogos'
 import { getMeses, getOrCreateMes, cerrarMes, getIngresosMes, saveIngresoMes, deleteIngresoMes, getGastosMes, saveGastoMes, deleteGastoMes, getDeudasTC, saveDeudaTC, deleteDeudaTC } from './database/queries/movimientos'
-import { getInversiones, saveInversion, deleteInversion, getInversionMensual, getInversionMensualMes, saveInversionMensual, getInmueble, saveInmueble } from './database/queries/inversiones'
+import { getInversiones, saveInversion, deleteInversion, getInversionMensual, getInversionMensualMes, saveInversionMensual, getInmueble, saveInmueble, getFichaInversion, saveFichaInversion, getAlertasCDT, getLotesInversion, saveLoteInversion, deleteLoteInversion, getResumenLotes } from './database/queries/inversiones'
 import { getPresupuestoFijos, savePresupuestoFijo, deletePresupuestoFijo, getPresupuestoVariables, savePresupuestoVariable, deletePresupuestoVariable } from './database/queries/presupuesto'
+import { actualizarTRM } from './services/trm'
 import { getDb } from './database/db'
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
@@ -36,6 +37,12 @@ app.whenReady().then(async () => {
   await initDatabase()
   registerIpcHandlers()
   createWindow()
+
+  // Auto-actualizar TRM al iniciar
+  actualizarTRM().then(r => {
+    if (r.ok) console.log(`TRM actualizada: ${r.mensaje}`)
+    else console.warn(`TRM no actualizada: ${r.mensaje}`)
+  }).catch(() => {})
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -86,6 +93,13 @@ function registerIpcHandlers() {
   ipcMain.handle('getInmueble', (_, inversion_id) => getInmueble(inversion_id))
   ipcMain.handle('saveInmueble', (_, data) => saveInmueble(data))
 
+  // Fichas técnicas
+  ipcMain.handle('getFichaInversion', (_, inversion_id) => getFichaInversion(inversion_id))
+  ipcMain.handle('saveFichaInversion', (_, data) => saveFichaInversion(data))
+
+  // Alertas CDT
+  ipcMain.handle('getAlertasCDT', () => getAlertasCDT())
+
   // Presupuesto
   ipcMain.handle('getPresupuestoFijos', () => getPresupuestoFijos())
   ipcMain.handle('savePresupuestoFijo', (_, data) => savePresupuestoFijo(data))
@@ -94,7 +108,16 @@ function registerIpcHandlers() {
   ipcMain.handle('savePresupuestoVariable', (_, data) => savePresupuestoVariable(data))
   ipcMain.handle('deletePresupuestoVariable', (_, id) => deletePresupuestoVariable(id))
 
-  // Dashboard — datos agregados
+  // TRM
+  ipcMain.handle('actualizarTRM', () => actualizarTRM())
+
+  // Lotes de compra
+  ipcMain.handle('getLotesInversion', (_, inversion_id) => getLotesInversion(inversion_id))
+  ipcMain.handle('saveLoteInversion', (_, data) => saveLoteInversion(data))
+  ipcMain.handle('deleteLoteInversion', (_, id) => deleteLoteInversion(id))
+  ipcMain.handle('getResumenLotes', (_, inversion_id) => getResumenLotes(inversion_id))
+
+  // Dashboard
   ipcMain.handle('getDashboardData', (_, anio, mes) => {
     const db = getDb()
 
@@ -106,7 +129,6 @@ function registerIpcHandlers() {
       )
     }
 
-    // Mes actual
     const mesActual = rowsToObjects(db.exec(
       'SELECT * FROM meses WHERE anio = ? AND mes = ?', [anio, mes]
     ))[0]
@@ -118,112 +140,82 @@ function registerIpcHandlers() {
       distribucionInversiones: [], distribucionTipos: [], distribucionRiesgo: []
     }
 
-    // Ingresos del mes
     const ingresosResult = rowsToObjects(db.exec(
       `SELECT COALESCE(SUM(i.monto * m.tasa_a_cop), 0) as total
-       FROM ingresos_mes i
-       LEFT JOIN monedas m ON i.moneda_id = m.id
-       WHERE i.mes_id = ?`, [mesActual.id]
+       FROM ingresos_mes i LEFT JOIN monedas m ON i.moneda_id = m.id WHERE i.mes_id = ?`, [mesActual.id]
     ))
     const ingresos = ingresosResult[0]?.total || 0
 
-    // Gastos del mes
     const gastosResult = rowsToObjects(db.exec(
       `SELECT COALESCE(SUM(g.monto * m.tasa_a_cop), 0) as total
-       FROM gastos_mes g
-       LEFT JOIN monedas m ON g.moneda_id = m.id
-       WHERE g.mes_id = ?`, [mesActual.id]
+       FROM gastos_mes g LEFT JOIN monedas m ON g.moneda_id = m.id WHERE g.mes_id = ?`, [mesActual.id]
     ))
     const gastos = gastosResult[0]?.total || 0
 
-    // Rendimientos del mes
     const rendimientosResult = rowsToObjects(db.exec(
       `SELECT COALESCE(SUM(im.rendimiento * mo.tasa_a_cop), 0) as total
-       FROM inversion_mensual im
-       JOIN inversiones inv ON im.inversion_id = inv.id
-       LEFT JOIN monedas mo ON inv.moneda_id = mo.id
-       WHERE im.mes_id = ?`, [mesActual.id]
+       FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
+       LEFT JOIN monedas mo ON inv.moneda_id = mo.id WHERE im.mes_id = ?`, [mesActual.id]
     ))
     const rendimientos = rendimientosResult[0]?.total || 0
 
-    // Deudas TC del mes
     const deudasResult = rowsToObjects(db.exec(
-      'SELECT COALESCE(SUM(saldo), 0) as total FROM deudas_tc WHERE mes_id = ?',
-      [mesActual.id]
+      'SELECT COALESCE(SUM(saldo), 0) as total FROM deudas_tc WHERE mes_id = ?', [mesActual.id]
     ))
     const deudasTC = deudasResult[0]?.total || 0
 
-    // Patrimonio neto — último saldo de cada inversión activa
     const patrimonioResult = rowsToObjects(db.exec(
       `SELECT COALESCE(SUM(im.saldo_cierre * mo.tasa_a_cop), 0) as total
-       FROM inversion_mensual im
-       JOIN inversiones inv ON im.inversion_id = inv.id
-       LEFT JOIN monedas mo ON inv.moneda_id = mo.id
-       WHERE im.mes_id = ?`, [mesActual.id]
+       FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
+       LEFT JOIN monedas mo ON inv.moneda_id = mo.id WHERE im.mes_id = ?`, [mesActual.id]
     ))
-    const patrimonioInversiones = patrimonioResult[0]?.total || 0
-    const patrimonioNeto = patrimonioInversiones - deudasTC
+    const patrimonioNeto = (patrimonioResult[0]?.total || 0) - deudasTC
 
-    // Últimos 6 meses — ingresos vs gastos
     const ultimos6Meses = rowsToObjects(db.exec(
       `SELECT m.anio, m.mes,
          COALESCE((SELECT SUM(i.monto * mo.tasa_a_cop) FROM ingresos_mes i
                    LEFT JOIN monedas mo ON i.moneda_id = mo.id WHERE i.mes_id = m.id), 0) as ingresos,
          COALESCE((SELECT SUM(g.monto * mo.tasa_a_cop) FROM gastos_mes g
                    LEFT JOIN monedas mo ON g.moneda_id = mo.id WHERE g.mes_id = m.id), 0) as gastos
-       FROM meses m
-       WHERE (m.anio * 12 + m.mes) <= (? * 12 + ?)
+       FROM meses m WHERE (m.anio * 12 + m.mes) <= (? * 12 + ?)
        ORDER BY m.anio DESC, m.mes DESC LIMIT 6`, [anio, mes]
     )).reverse()
 
-    // Últimos 12 meses — patrimonio neto
     const ultimos12Meses = rowsToObjects(db.exec(
       `SELECT m.anio, m.mes,
          COALESCE((SELECT SUM(im.saldo_cierre * mo.tasa_a_cop)
-                   FROM inversion_mensual im
-                   JOIN inversiones inv ON im.inversion_id = inv.id
-                   LEFT JOIN monedas mo ON inv.moneda_id = mo.id
-                   WHERE im.mes_id = m.id), 0) -
+                   FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
+                   LEFT JOIN monedas mo ON inv.moneda_id = mo.id WHERE im.mes_id = m.id), 0) -
          COALESCE((SELECT SUM(saldo) FROM deudas_tc WHERE mes_id = m.id), 0) as patrimonio
-       FROM meses m
-       WHERE (m.anio * 12 + m.mes) <= (? * 12 + ?)
+       FROM meses m WHERE (m.anio * 12 + m.mes) <= (? * 12 + ?)
        ORDER BY m.anio DESC, m.mes DESC LIMIT 12`, [anio, mes]
     )).reverse()
 
-    // Distribución de inversiones por monto
     const distribucionInversiones = rowsToObjects(db.exec(
       `SELECT inv.nombre, im.saldo_cierre * mo.tasa_a_cop as valor
-       FROM inversion_mensual im
-       JOIN inversiones inv ON im.inversion_id = inv.id
+       FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
        LEFT JOIN monedas mo ON inv.moneda_id = mo.id
        WHERE im.mes_id = ? AND im.saldo_cierre > 0`, [mesActual.id]
     ))
 
-    // Distribución por tipo de inversión
     const distribucionTipos = rowsToObjects(db.exec(
       `SELECT t.nombre as tipo, SUM(im.saldo_cierre * mo.tasa_a_cop) as valor
-       FROM inversion_mensual im
-       JOIN inversiones inv ON im.inversion_id = inv.id
+       FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
        LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
        LEFT JOIN monedas mo ON inv.moneda_id = mo.id
-       WHERE im.mes_id = ? AND im.saldo_cierre > 0
-       GROUP BY t.nombre`, [mesActual.id]
+       WHERE im.mes_id = ? AND im.saldo_cierre > 0 GROUP BY t.nombre`, [mesActual.id]
     ))
 
-    // Distribución por perfil de riesgo
     const distribucionRiesgo = rowsToObjects(db.exec(
       `SELECT r.nombre as riesgo, r.color, SUM(im.saldo_cierre * mo.tasa_a_cop) as valor
-       FROM inversion_mensual im
-       JOIN inversiones inv ON im.inversion_id = inv.id
+       FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
        LEFT JOIN perfiles_riesgo r ON inv.riesgo_id = r.id
        LEFT JOIN monedas mo ON inv.moneda_id = mo.id
-       WHERE im.mes_id = ? AND im.saldo_cierre > 0
-       GROUP BY r.nombre, r.color`, [mesActual.id]
+       WHERE im.mes_id = ? AND im.saldo_cierre > 0 GROUP BY r.nombre, r.color`, [mesActual.id]
     ))
 
     return {
-      ingresos, gastos, rendimientos,
-      patrimonioNeto, deudasTC,
+      ingresos, gastos, rendimientos, patrimonioNeto, deudasTC,
       ultimos6Meses, ultimos12Meses,
       distribucionInversiones, distribucionTipos, distribucionRiesgo
     }

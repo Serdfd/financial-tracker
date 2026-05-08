@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Plus, ChevronRight, TrendingUp, Building2, X } from 'lucide-react'
+import { Plus, ChevronRight, TrendingUp, Building2, X, Trash2, Pencil, FileText, Package } from 'lucide-react'
 import ReactApexChart from 'react-apexcharts'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { useAppStore } from '@/store/useAppStore'
-import { Inversion, InversionMensual, Inmueble } from '@/types'
+import { Inversion, InversionMensual, Inmueble, FichaInversion, LoteInversion, ResumenLotes } from '@/types'
 import { formatCOP, formatPct, MESES_NOMBRES, nombreMes } from '@/lib/format'
 
 export function Inversiones() {
@@ -14,13 +14,20 @@ export function Inversiones() {
   const [seleccionada, setSeleccionada] = useState<Inversion | null>(null)
   const [historial, setHistorial] = useState<InversionMensual[]>([])
   const [inmueble, setInmueble] = useState<Inmueble | null>(null)
+  const [ficha, setFicha] = useState<FichaInversion | null>(null)
+  const [lotes, setLotes] = useState<LoteInversion[]>([])
+  const [resumenLotes, setResumenLotes] = useState<ResumenLotes | null>(null)
   const [modalInversion, setModalInversion] = useState(false)
   const [modalInmueble, setModalInmueble] = useState(false)
+  const [modalFicha, setModalFicha] = useState(false)
+  const [modalLote, setModalLote] = useState(false)
   const [tab, setTab] = useState<'lista' | 'inmuebles'>('lista')
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  // Formulario nueva inversión
-  const [form, setForm] = useState<Partial<Inversion>>({ estado: 'activo' })
+  const [form, setForm] = useState<any>({ estado: 'activo' })
   const [formInmueble, setFormInmueble] = useState<Partial<Inmueble>>({ estado: 'en_construccion', cuotas_pagadas: 0 })
+  const [formFicha, setFormFicha] = useState<Partial<FichaInversion>>({})
+  const [formLote, setFormLote] = useState<any>({ fecha_compra: new Date().toISOString().split('T')[0] })
 
   useEffect(() => { cargar() }, [])
 
@@ -31,10 +38,42 @@ export function Inversiones() {
 
   async function verDetalle(inv: Inversion) {
     setSeleccionada(inv)
-    const h = await window.electronAPI.getInversionMensual(inv.id)
+    const [h, inm, f, l, r] = await Promise.all([
+      window.electronAPI.getInversionMensual(inv.id),
+      window.electronAPI.getInmueble(inv.id),
+      window.electronAPI.getFichaInversion(inv.id),
+      window.electronAPI.getLotesInversion(inv.id),
+      window.electronAPI.getResumenLotes(inv.id),
+    ])
     setHistorial(h)
-    const inm = await window.electronAPI.getInmueble(inv.id)
     setInmueble(inm)
+    setFicha(f)
+    setLotes(l)
+    setResumenLotes(r)
+  }
+
+  async function abrirModalInmueble(inv: Inversion) {
+    await verDetalle(inv)
+    const inm = await window.electronAPI.getInmueble(inv.id)
+    if (inm) setFormInmueble({ ...inm })
+    else setFormInmueble({ estado: 'en_construccion', cuotas_pagadas: 0 })
+    setModalInmueble(true)
+  }
+
+  function editarInversion(inv: Inversion) {
+    setForm({
+      id: inv.id, nombre: inv.nombre, entidad_id: inv.entidad_id,
+      tipo_id: inv.tipo_id, riesgo_id: inv.riesgo_id, moneda_id: inv.moneda_id,
+      estado: inv.estado, fecha_inicio: inv.fecha_inicio, notas: inv.notas,
+    })
+    setModalInversion(true)
+  }
+
+  async function abrirModalFicha() {
+    if (!seleccionada) return
+    const f = await window.electronAPI.getFichaInversion(seleccionada.id)
+    setFormFicha(f || { inversion_id: seleccionada.id })
+    setModalFicha(true)
   }
 
   async function guardarInversion() {
@@ -42,6 +81,11 @@ export function Inversiones() {
     await cargarCatalogos()
     await cargar()
     setModalInversion(false)
+    if (form.id && seleccionada?.id === form.id) {
+      const invs = await window.electronAPI.getInversiones()
+      const updated = invs.find((i: Inversion) => i.id === form.id)
+      if (updated) await verDetalle(updated)
+    }
     setForm({ estado: 'activo' })
   }
 
@@ -51,6 +95,41 @@ export function Inversiones() {
     const inm = await window.electronAPI.getInmueble(seleccionada.id)
     setInmueble(inm)
     setModalInmueble(false)
+    setRefreshKey(prev => prev + 1)
+  }
+
+  async function guardarFicha() {
+    if (!seleccionada) return
+    await window.electronAPI.saveFichaInversion({ ...formFicha, inversion_id: seleccionada.id })
+    const f = await window.electronAPI.getFichaInversion(seleccionada.id)
+    setFicha(f)
+    setModalFicha(false)
+  }
+
+  async function guardarLote() {
+    if (!seleccionada) return
+    await window.electronAPI.saveLoteInversion({ ...formLote, inversion_id: seleccionada.id })
+    const [l, r] = await Promise.all([
+      window.electronAPI.getLotesInversion(seleccionada.id),
+      window.electronAPI.getResumenLotes(seleccionada.id),
+    ])
+    setLotes(l)
+    setResumenLotes(r)
+    setModalLote(false)
+    setFormLote({ fecha_compra: new Date().toISOString().split('T')[0] })
+  }
+
+  async function eliminarLote(id: number) {
+    if (!confirm('¿Eliminar este lote de compra?')) return
+    await window.electronAPI.deleteLoteInversion(id)
+    if (seleccionada) {
+      const [l, r] = await Promise.all([
+        window.electronAPI.getLotesInversion(seleccionada.id),
+        window.electronAPI.getResumenLotes(seleccionada.id),
+      ])
+      setLotes(l)
+      setResumenLotes(r)
+    }
   }
 
   async function eliminarInversion(id: number) {
@@ -60,12 +139,31 @@ export function Inversiones() {
     if (seleccionada?.id === id) setSeleccionada(null)
   }
 
-  // Calcular saldo actual (último registro)
-  function saldoActual(inv: Inversion): number {
-    return 0 // Se calcula en el detalle
+  // Saldo inicial ahora es OPCIONAL
+  const formValido = !!(form.nombre && form.nombre.trim())
+
+  // Determinar si esta inversión soporta lotes
+  function tieneModeloLotes(inv: Inversion | null): boolean {
+    if (!inv?.tipo_nombre) return false
+    const t = inv.tipo_nombre.toLowerCase()
+    return t === 'acciones' || t === 'crypto'
   }
 
-  // Gráfica evolución
+  function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 'otro' {
+    if (!inv?.tipo_nombre) return 'otro'
+    const t = inv.tipo_nombre.toLowerCase()
+    if (t === 'cdt') return 'cdt'
+    if (t === 'acciones') return 'acciones'
+    if (t === 'crypto') return 'crypto'
+    return 'otro'
+  }
+
+  // Calcular rendimiento basado en lotes
+  const ultimoSaldo = historial.length > 0 ? historial[historial.length - 1].saldo_cierre : 0
+  const rendimientoLotes = resumenLotes ? ultimoSaldo - resumenLotes.costo_total : 0
+  const rendimientoPctLotes = resumenLotes && resumenLotes.costo_total > 0
+    ? (rendimientoLotes / resumenLotes.costo_total) * 100 : 0
+
   const lineOptions: ApexCharts.ApexOptions = {
     chart: { type: 'area', background: 'transparent', toolbar: { show: false } },
     colors: ['#6366f1'],
@@ -76,17 +174,11 @@ export function Inversiones() {
       categories: historial.map(h => `${MESES_NOMBRES[h.mes!].slice(0, 3)} ${h.anio}`),
       labels: { style: { colors: '#94a3b8' } },
     },
-    yaxis: {
-      labels: {
-        style: { colors: '#94a3b8' },
-        formatter: (v) => `$${(v / 1_000_000).toFixed(1)}M`
-      }
-    },
+    yaxis: { labels: { style: { colors: '#94a3b8' }, formatter: (v) => `$${(v / 1_000_000).toFixed(1)}M` } },
     grid: { borderColor: '#334155' },
     tooltip: { theme: 'dark', y: { formatter: (v) => formatCOP(v) } },
   }
 
-  const inversionesConTipo = inversiones.filter(i => i.tipo_nombre !== 'Inmueble')
   const inmuebles = inversiones.filter(i => i.tipo_nombre === 'Inmueble')
 
   return (
@@ -97,7 +189,7 @@ export function Inversiones() {
           <h1 className="text-2xl font-bold text-white">Inversiones</h1>
           <p className="text-slate-400 text-sm mt-0.5">Portafolio y seguimiento</p>
         </div>
-        <button onClick={() => setModalInversion(true)}
+        <button onClick={() => { setForm({ estado: 'activo' }); setModalInversion(true) }}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
           <Plus size={16} /> Nueva Inversión
         </button>
@@ -114,7 +206,7 @@ export function Inversiones() {
       </div>
 
       <div className="flex gap-6">
-        {/* Lista de inversiones */}
+        {/* Lista */}
         <div className="flex-1 space-y-3">
           {tab === 'lista' && (
             <>
@@ -122,15 +214,14 @@ export function Inversiones() {
                 <Card className="text-center py-12">
                   <TrendingUp size={40} className="text-slate-600 mx-auto mb-3" />
                   <p className="text-slate-400">No tienes inversiones registradas</p>
-                  <button onClick={() => setModalInversion(true)}
+                  <button onClick={() => { setForm({ estado: 'activo' }); setModalInversion(true) }}
                     className="mt-4 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
                     Agregar primera inversión
                   </button>
                 </Card>
               )}
               {inversiones.map(inv => (
-                <Card key={inv.id}
-                  onClick={() => verDetalle(inv)}
+                <Card key={inv.id} onClick={() => verDetalle(inv)}
                   className={`cursor-pointer transition-all ${seleccionada?.id === inv.id ? 'border-indigo-500' : ''}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
@@ -164,14 +255,14 @@ export function Inversiones() {
                 </Card>
               )}
               {inmuebles.map(inv => (
-                <InmuebleCard key={inv.id} inversion={inv}
-                  onClick={() => { verDetalle(inv); setModalInmueble(true) }} />
+                <InmuebleCard key={`${inv.id}-${refreshKey}`} inversion={inv}
+                  onClick={() => abrirModalInmueble(inv)} />
               ))}
             </>
           )}
         </div>
 
-        {/* Panel de detalle */}
+        {/* Panel detalle */}
         {seleccionada && tab === 'lista' && (
           <div className="w-[480px] space-y-4">
             <Card>
@@ -180,12 +271,10 @@ export function Inversiones() {
                   <h3 className="text-white font-bold text-lg">{seleccionada.nombre}</h3>
                   <p className="text-slate-400 text-sm">{seleccionada.entidad_nombre}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => eliminarInversion(seleccionada.id)}
-                    className="p-1.5 text-red-400 hover:bg-red-500/20 rounded transition-colors">
-                    <X size={16} />
-                  </button>
-                </div>
+                <button onClick={() => setSeleccionada(null)}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors">
+                  <X size={16} />
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="bg-slate-900 p-3 rounded-lg">
@@ -210,9 +299,114 @@ export function Inversiones() {
               {seleccionada.notas && (
                 <p className="text-slate-400 text-sm mt-3 bg-slate-900 p-3 rounded-lg">{seleccionada.notas}</p>
               )}
+
+              {/* Resumen de lotes (solo acciones/crypto) */}
+              {tieneModeloLotes(seleccionada) && resumenLotes && resumenLotes.total_unidades > 0 && (
+                <div className="mt-3 bg-slate-900 p-3 rounded-lg">
+                  <p className="text-slate-400 text-xs mb-2 flex items-center gap-1"><Package size={12} /> Resumen de posición</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-slate-500">Total unidades:</span> <span className="text-white font-mono">{resumenLotes.total_unidades.toLocaleString('es-CO', { maximumFractionDigits: 8 })}</span></div>
+                    <div><span className="text-slate-500">Precio promedio:</span> <span className="text-white font-mono">{formatCOP(resumenLotes.precio_promedio)}</span></div>
+                    <div><span className="text-slate-500">Costo total:</span> <span className="text-white font-mono">{formatCOP(resumenLotes.costo_total)}</span></div>
+                    <div><span className="text-slate-500">Comisiones:</span> <span className="text-amber-400 font-mono">{formatCOP(resumenLotes.total_comisiones)}</span></div>
+                    {ultimoSaldo > 0 && (
+                      <>
+                        <div><span className="text-slate-500">Valor actual:</span> <span className="text-white font-mono">{formatCOP(ultimoSaldo)}</span></div>
+                        <div><span className="text-slate-500">Rendimiento:</span> <span className={`font-mono ${rendimientoLotes >= 0 ? 'text-green-400' : 'text-red-400'}`}>{rendimientoLotes >= 0 ? '+' : ''}{formatCOP(rendimientoLotes)} ({formatPct(rendimientoPctLotes)})</span></div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Ficha técnica resumen (CDT u otros) */}
+              {ficha && !tieneModeloLotes(seleccionada) && (
+                <div className="mt-3 bg-slate-900 p-3 rounded-lg">
+                  <p className="text-slate-400 text-xs mb-2 flex items-center gap-1"><FileText size={12} /> Ficha técnica</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {ficha.tasa_ea && <div><span className="text-slate-500">Tasa EA:</span> <span className="text-green-400 font-mono">{ficha.tasa_ea}%</span></div>}
+                    {ficha.fecha_vencimiento && <div><span className="text-slate-500">Vence:</span> <span className="text-white">{ficha.fecha_vencimiento}</span></div>}
+                    {ficha.plazo_dias && <div><span className="text-slate-500">Plazo:</span> <span className="text-white">{ficha.plazo_dias} días</span></div>}
+                    {ficha.monto_inicial && <div><span className="text-slate-500">Monto inicial:</span> <span className="text-white font-mono">{formatCOP(ficha.monto_inicial)}</span></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Ficha referencia para acciones/crypto */}
+              {ficha && tieneModeloLotes(seleccionada) && (ficha.ticker || ficha.mercado || ficha.token_symbol) && (
+                <div className="mt-3 bg-slate-900 p-3 rounded-lg">
+                  <p className="text-slate-400 text-xs mb-2 flex items-center gap-1"><FileText size={12} /> Referencia</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {ficha.ticker && <div><span className="text-slate-500">Ticker:</span> <span className="text-white">{ficha.ticker}</span></div>}
+                    {ficha.mercado && <div><span className="text-slate-500">Mercado:</span> <span className="text-white">{ficha.mercado}</span></div>}
+                    {ficha.token_symbol && <div><span className="text-slate-500">Symbol:</span> <span className="text-white">{ficha.token_symbol}</span></div>}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 pt-3 border-t border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => editarInversion(seleccionada)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-indigo-400 hover:bg-indigo-500/20 rounded-lg transition-colors text-sm">
+                    <Pencil size={14} /> Editar
+                  </button>
+                  {!tieneModeloLotes(seleccionada) && (
+                    <button onClick={abrirModalFicha}
+                      className="flex items-center gap-1.5 px-3 py-2 text-cyan-400 hover:bg-cyan-500/20 rounded-lg transition-colors text-sm">
+                      <FileText size={14} /> Ficha
+                    </button>
+                  )}
+                  {tieneModeloLotes(seleccionada) && (
+                    <>
+                      <button onClick={() => setModalLote(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors text-sm">
+                        <Plus size={14} /> Compra
+                      </button>
+                      <button onClick={abrirModalFicha}
+                        className="flex items-center gap-1.5 px-3 py-2 text-cyan-400 hover:bg-cyan-500/20 rounded-lg transition-colors text-sm">
+                        <FileText size={14} /> Ref.
+                      </button>
+                    </>
+                  )}
+                </div>
+                <button onClick={() => eliminarInversion(seleccionada.id)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors text-sm">
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </Card>
 
-            {/* Gráfica evolución */}
+            {/* Historial de lotes (solo acciones/crypto) */}
+            {tieneModeloLotes(seleccionada) && lotes.length > 0 && (
+              <Card>
+                <h4 className="text-white font-semibold mb-3 text-sm">Historial de compras</h4>
+                <div className="space-y-2">
+                  {lotes.map(l => (
+                    <div key={l.id} className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-slate-400">{l.fecha_compra}</span>
+                          <span className="text-white font-mono">{l.cantidad.toLocaleString('es-CO', { maximumFractionDigits: 8 })} uds</span>
+                          <span className="text-slate-400">×</span>
+                          <span className="text-white font-mono">{formatCOP(l.precio_unitario)}</span>
+                          {l.comision > 0 && <span className="text-amber-400 font-mono text-[10px]">+{formatCOP(l.comision)} com.</span>}
+                        </div>
+                        {l.nota && <p className="text-slate-500 text-[10px] mt-0.5">{l.nota}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-300 font-mono text-xs">{formatCOP(l.cantidad * l.precio_unitario + l.comision)}</span>
+                        <button onClick={(e) => { e.stopPropagation(); eliminarLote(l.id) }}
+                          className="p-1 text-slate-500 hover:text-red-400 transition-colors">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Gráfica */}
             {historial.length > 0 && (
               <Card>
                 <h4 className="text-white font-semibold mb-3 text-sm">Evolución del saldo</h4>
@@ -222,7 +416,7 @@ export function Inversiones() {
               </Card>
             )}
 
-            {/* Historial mes a mes */}
+            {/* Historial mensual */}
             {historial.length > 0 && (
               <Card>
                 <h4 className="text-white font-semibold mb-3 text-sm">Historial mensual</h4>
@@ -260,80 +454,251 @@ export function Inversiones() {
         )}
       </div>
 
-      {/* Modal nueva inversión */}
-      <Modal open={modalInversion} onClose={() => setModalInversion(false)} titulo="Nueva Inversión">
+      {/* Modal nueva/editar inversión */}
+      <Modal open={modalInversion} onClose={() => { setModalInversion(false); setForm({ estado: 'activo' }) }}
+        titulo={form.id ? 'Editar Inversión' : 'Nueva Inversión'}>
         <div className="space-y-4">
           <div>
-            <label className="text-slate-400 text-sm block mb-1">Nombre *</label>
-            <input value={form.nombre || ''} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
-              placeholder="Ej: CDT Bancolombia 90 días" />
+            <label className="text-slate-400 text-sm block mb-1">Nombre <span className="text-red-400">*</span></label>
+            <input value={form.nombre || ''} onChange={e => setForm((p: any) => ({ ...p, nombre: e.target.value }))}
+              placeholder="Ej: PF CIBEST, BTC, CDT Bancolombia" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-slate-400 text-sm block mb-1">Entidad</label>
-              <select value={form.entidad_id || ''} onChange={e => setForm(p => ({ ...p, entidad_id: Number(e.target.value) }))}>
+              <select value={form.entidad_id || ''} onChange={e => setForm((p: any) => ({ ...p, entidad_id: Number(e.target.value) }))}>
                 <option value="">Sin entidad</option>
                 {entidades.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
               </select>
             </div>
             <div>
               <label className="text-slate-400 text-sm block mb-1">Tipo de inversión</label>
-              <select value={form.tipo_id || ''} onChange={e => setForm(p => ({ ...p, tipo_id: Number(e.target.value) }))}>
+              <select value={form.tipo_id || ''} onChange={e => setForm((p: any) => ({ ...p, tipo_id: Number(e.target.value) }))}>
                 <option value="">Sin tipo</option>
                 {tiposInversion.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
               </select>
             </div>
             <div>
               <label className="text-slate-400 text-sm block mb-1">Perfil de riesgo</label>
-              <select value={form.riesgo_id || ''} onChange={e => setForm(p => ({ ...p, riesgo_id: Number(e.target.value) }))}>
+              <select value={form.riesgo_id || ''} onChange={e => setForm((p: any) => ({ ...p, riesgo_id: Number(e.target.value) }))}>
                 <option value="">Sin perfil</option>
                 {perfilesRiesgo.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
               </select>
             </div>
             <div>
               <label className="text-slate-400 text-sm block mb-1">Moneda</label>
-              <select value={form.moneda_id || ''} onChange={e => setForm(p => ({ ...p, moneda_id: Number(e.target.value) }))}>
+              <select value={form.moneda_id || ''} onChange={e => setForm((p: any) => ({ ...p, moneda_id: Number(e.target.value) }))}>
                 <option value="">Seleccionar</option>
                 {monedas.map(m => <option key={m.id} value={m.id}>{m.codigo} — {m.nombre}</option>)}
               </select>
             </div>
             <div>
               <label className="text-slate-400 text-sm block mb-1">Fecha inicio</label>
-              <input type="date" value={form.fecha_inicio || ''} onChange={e => setForm(p => ({ ...p, fecha_inicio: e.target.value }))} />
+              <input type="date" value={form.fecha_inicio || ''} onChange={e => setForm((p: any) => ({ ...p, fecha_inicio: e.target.value }))} />
             </div>
             <div>
               <label className="text-slate-400 text-sm block mb-1">Estado</label>
-              <select value={form.estado || 'activo'} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}>
+              <select value={form.estado || 'activo'} onChange={e => setForm((p: any) => ({ ...p, estado: e.target.value }))}>
                 <option value="activo">Activo</option>
                 <option value="pausado">Pausado</option>
                 <option value="cerrado">Cerrado</option>
               </select>
             </div>
           </div>
+
+          {/* Saldo inicial OPCIONAL */}
+          {!form.id && (
+            <div>
+              <label className="text-slate-400 text-sm block mb-1">Saldo inicial <span className="text-slate-600">(opcional)</span></label>
+              <input type="number" value={form.saldo_inicial || ''} placeholder="¿Cuánto vale hoy tu posición? (0 si es nueva)"
+                onChange={e => setForm((p: any) => ({ ...p, saldo_inicial: Number(e.target.value) }))} />
+              <p className="text-slate-500 text-xs mt-1">Usa esto si ya tienes una posición y quieres empezar a trackear. Déjalo vacío si empiezas de cero.</p>
+            </div>
+          )}
+
           <div>
             <label className="text-slate-400 text-sm block mb-1">Notas</label>
-            <textarea value={form.notas || ''} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))}
+            <textarea value={form.notas || ''} onChange={e => setForm((p: any) => ({ ...p, notas: e.target.value }))}
               placeholder="Información adicional..." rows={3} />
           </div>
           <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => setModalInversion(false)}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm">
-              Cancelar
+            <button onClick={() => { setModalInversion(false); setForm({ estado: 'activo' }) }}
+              className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm">Cancelar</button>
+            <button onClick={guardarInversion} disabled={!formValido}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              {form.id ? 'Actualizar' : 'Guardar'}
             </button>
-            <button onClick={guardarInversion} disabled={!form.nombre}
-              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal registrar lote de compra */}
+      <Modal open={modalLote} onClose={() => setModalLote(false)}
+        titulo={`Registrar compra — ${seleccionada?.nombre}`}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-slate-400 text-sm block mb-1">Fecha de compra <span className="text-red-400">*</span></label>
+              <input type="date" value={formLote.fecha_compra || ''}
+                onChange={e => setFormLote((p: any) => ({ ...p, fecha_compra: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-slate-400 text-sm block mb-1">
+                {getTipoFicha(seleccionada) === 'crypto' ? 'Cantidad de tokens' : 'Número de acciones'} <span className="text-red-400">*</span>
+              </label>
+              <input type="number" step="0.00000001" value={formLote.cantidad || ''} placeholder="0"
+                onChange={e => setFormLote((p: any) => ({ ...p, cantidad: Number(e.target.value) }))} />
+            </div>
+            <div>
+              <label className="text-slate-400 text-sm block mb-1">Precio unitario <span className="text-red-400">*</span></label>
+              <input type="number" step="0.01" value={formLote.precio_unitario || ''} placeholder="Precio por unidad"
+                onChange={e => setFormLote((p: any) => ({ ...p, precio_unitario: Number(e.target.value) }))} />
+            </div>
+            <div>
+              <label className="text-slate-400 text-sm block mb-1">Comisión</label>
+              <input type="number" step="0.01" value={formLote.comision || ''} placeholder="0"
+                onChange={e => setFormLote((p: any) => ({ ...p, comision: Number(e.target.value) }))} />
+            </div>
+          </div>
+          {/* Subtotal */}
+          {formLote.cantidad > 0 && formLote.precio_unitario > 0 && (
+            <div className="bg-slate-900 p-3 rounded-lg text-sm">
+              <div className="flex justify-between text-slate-400">
+                <span>Subtotal:</span>
+                <span className="text-white font-mono">{formatCOP(formLote.cantidad * formLote.precio_unitario)}</span>
+              </div>
+              {formLote.comision > 0 && (
+                <div className="flex justify-between text-slate-400 mt-1">
+                  <span>+ Comisión:</span>
+                  <span className="text-amber-400 font-mono">{formatCOP(formLote.comision)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-white font-semibold mt-2 pt-2 border-t border-slate-700">
+                <span>Total:</span>
+                <span className="font-mono">{formatCOP(formLote.cantidad * formLote.precio_unitario + (formLote.comision || 0))}</span>
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="text-slate-400 text-sm block mb-1">Nota</label>
+            <input value={formLote.nota || ''} placeholder="Ej: Compra programada mensual"
+              onChange={e => setFormLote((p: any) => ({ ...p, nota: e.target.value }))} />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setModalLote(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
+            <button onClick={guardarLote}
+              disabled={!formLote.fecha_compra || !formLote.cantidad || !formLote.precio_unitario}
+              className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              Registrar compra
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal ficha técnica */}
+      <Modal open={modalFicha} onClose={() => setModalFicha(false)}
+        titulo={`${tieneModeloLotes(seleccionada) ? 'Datos de referencia' : 'Ficha Técnica'} — ${seleccionada?.nombre}`} ancho="max-w-lg">
+        <div className="space-y-4">
+          {getTipoFicha(seleccionada) === 'cdt' && (
+            <>
+              <p className="text-indigo-400 text-xs font-semibold uppercase">CDT / Renta fija</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Tasa EA (%)</label>
+                  <input type="number" step="0.01" value={formFicha.tasa_ea || ''} placeholder="Ej: 12.5"
+                    onChange={e => setFormFicha(p => ({ ...p, tasa_ea: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Fecha vencimiento</label>
+                  <input type="date" value={formFicha.fecha_vencimiento || ''}
+                    onChange={e => setFormFicha(p => ({ ...p, fecha_vencimiento: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Plazo (días)</label>
+                  <input type="number" value={formFicha.plazo_dias || ''} placeholder="90, 180, 360..."
+                    onChange={e => setFormFicha(p => ({ ...p, plazo_dias: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Monto inicial</label>
+                  <input type="number" value={formFicha.monto_inicial || ''} placeholder="0"
+                    onChange={e => setFormFicha(p => ({ ...p, monto_inicial: Number(e.target.value) }))} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {getTipoFicha(seleccionada) === 'acciones' && (
+            <>
+              <p className="text-indigo-400 text-xs font-semibold uppercase">Datos de referencia — Acciones</p>
+              <p className="text-slate-500 text-xs">Las compras se registran desde el botón "+ Compra". Aquí solo datos informativos.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Ticker</label>
+                  <input value={formFicha.ticker || ''} placeholder="PFCIBEST, AAPL..."
+                    onChange={e => setFormFicha(p => ({ ...p, ticker: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Mercado</label>
+                  <input value={formFicha.mercado || ''} placeholder="BVC, NYSE..."
+                    onChange={e => setFormFicha(p => ({ ...p, mercado: e.target.value }))} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {getTipoFicha(seleccionada) === 'crypto' && (
+            <>
+              <p className="text-indigo-400 text-xs font-semibold uppercase">Datos de referencia — Crypto</p>
+              <p className="text-slate-500 text-xs">Las compras se registran desde el botón "+ Compra". Aquí solo datos informativos.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Token / Símbolo</label>
+                  <input value={formFicha.token_symbol || ''} placeholder="BTC, ETH, SOL..."
+                    onChange={e => setFormFicha(p => ({ ...p, token_symbol: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Mercado / Exchange</label>
+                  <input value={formFicha.mercado || ''} placeholder="Binance, Coinbase..."
+                    onChange={e => setFormFicha(p => ({ ...p, mercado: e.target.value }))} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {getTipoFicha(seleccionada) === 'otro' && (
+            <>
+              <p className="text-indigo-400 text-xs font-semibold uppercase">Datos generales</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Tasa EA (%)</label>
+                  <input type="number" step="0.01" value={formFicha.tasa_ea || ''} placeholder="Opcional"
+                    onChange={e => setFormFicha(p => ({ ...p, tasa_ea: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-sm block mb-1">Monto inicial</label>
+                  <input type="number" value={formFicha.monto_inicial || ''} placeholder="0"
+                    onChange={e => setFormFicha(p => ({ ...p, monto_inicial: Number(e.target.value) }))} />
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setModalFicha(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
+            <button onClick={guardarFicha}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
               Guardar
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* Modal datos inmueble */}
+      {/* Modal inmueble */}
       <Modal open={modalInmueble} onClose={() => setModalInmueble(false)} titulo={`Inmueble — ${seleccionada?.nombre}`} ancho="max-w-xl">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-400 text-sm block mb-1">Precio de compra *</label>
+              <label className="text-slate-400 text-sm block mb-1">Precio de compra <span className="text-red-400">*</span></label>
               <input type="number" value={formInmueble.precio_compra || ''} placeholder="0"
                 onChange={e => setFormInmueble(p => ({ ...p, precio_compra: Number(e.target.value) }))} />
             </div>
@@ -375,13 +740,18 @@ export function Inversiones() {
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setModalInmueble(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
-            <button onClick={guardarInmueble} className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm">Guardar</button>
+            <button onClick={guardarInmueble} disabled={!formInmueble.precio_compra}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              Guardar
+            </button>
           </div>
         </div>
       </Modal>
     </div>
   )
 }
+
+// ── InmuebleCard ────────────────────────────────────────
 
 function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: () => void }) {
   const [inmueble, setInmueble] = useState<Inmueble | null>(null)
@@ -392,21 +762,14 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
 
   const plusvalia = inmueble ? (inmueble.valor_estimado_actual || 0) - inmueble.precio_compra : 0
   const progreso = inmueble && inmueble.cuotas_totales
-    ? Math.round((inmueble.cuotas_pagadas / inmueble.cuotas_totales) * 100)
-    : 0
+    ? Math.round((inmueble.cuotas_pagadas / inmueble.cuotas_totales) * 100) : 0
   const pagadoHastaHoy = inmueble ? (inmueble.cuota_mensual || 0) * inmueble.cuotas_pagadas : 0
 
   const estadoColors: Record<string, string> = {
-    en_construccion: '#eab308',
-    recibido: '#22c55e',
-    en_arriendo: '#06b6d4',
-    vendido: '#8b5cf6',
+    en_construccion: '#eab308', recibido: '#22c55e', en_arriendo: '#06b6d4', vendido: '#8b5cf6',
   }
   const estadoLabels: Record<string, string> = {
-    en_construccion: 'En construcción',
-    recibido: 'Recibido',
-    en_arriendo: 'En arriendo',
-    vendido: 'Vendido',
+    en_construccion: 'En construcción', recibido: 'Recibido', en_arriendo: 'En arriendo', vendido: 'Vendido',
   }
 
   return (
@@ -416,12 +779,7 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
           <div className="flex items-center gap-2 mb-1">
             <Building2 size={16} className="text-indigo-400" />
             <p className="text-white font-semibold">{inversion.nombre}</p>
-            {inmueble && (
-              <Badge
-                label={estadoLabels[inmueble.estado] || inmueble.estado}
-                color={estadoColors[inmueble.estado] || '#6366f1'}
-              />
-            )}
+            {inmueble && <Badge label={estadoLabels[inmueble.estado] || inmueble.estado} color={estadoColors[inmueble.estado] || '#6366f1'} />}
           </div>
           <p className="text-slate-500 text-xs">{inversion.entidad_nombre || 'Sin entidad'}</p>
         </div>
@@ -432,57 +790,23 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
           </div>
         )}
       </div>
-
       {inmueble ? (
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-slate-900 p-3 rounded-lg">
-            <p className="text-slate-400 text-xs">Precio compra</p>
-            <p className="text-white font-mono font-bold text-sm mt-0.5">{formatCOP(inmueble.precio_compra)}</p>
-          </div>
-          <div className="bg-slate-900 p-3 rounded-lg">
-            <p className="text-slate-400 text-xs">Valor actual</p>
-            <p className="text-white font-mono font-bold text-sm mt-0.5">
-              {inmueble.valor_estimado_actual ? formatCOP(inmueble.valor_estimado_actual) : '—'}
-            </p>
-          </div>
-          <div className="bg-slate-900 p-3 rounded-lg">
-            <p className="text-slate-400 text-xs">Plusvalía</p>
-            <p className={`font-mono font-bold text-sm mt-0.5 ${plusvalia >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {plusvalia !== 0 ? formatCOP(plusvalia) : '—'}
-            </p>
-          </div>
-          <div className="bg-slate-900 p-3 rounded-lg">
-            <p className="text-slate-400 text-xs">Pagado hasta hoy</p>
-            <p className="text-cyan-400 font-mono font-bold text-sm mt-0.5">{formatCOP(pagadoHastaHoy)}</p>
-          </div>
-          <div className="bg-slate-900 p-3 rounded-lg">
-            <p className="text-slate-400 text-xs">Cuota mensual</p>
-            <p className="text-white font-mono text-sm mt-0.5">
-              {inmueble.cuota_mensual ? formatCOP(inmueble.cuota_mensual) : '—'}
-            </p>
-          </div>
-          <div className="bg-slate-900 p-3 rounded-lg">
-            <p className="text-slate-400 text-xs">Cuotas</p>
-            <p className="text-white font-mono text-sm mt-0.5">
-              {inmueble.cuotas_pagadas} / {inmueble.cuotas_totales || '?'}
-            </p>
-          </div>
+          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Precio compra</p><p className="text-white font-mono font-bold text-sm mt-0.5">{formatCOP(inmueble.precio_compra)}</p></div>
+          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Valor actual</p><p className="text-white font-mono font-bold text-sm mt-0.5">{inmueble.valor_estimado_actual ? formatCOP(inmueble.valor_estimado_actual) : '—'}</p></div>
+          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Plusvalía</p><p className={`font-mono font-bold text-sm mt-0.5 ${plusvalia >= 0 ? 'text-green-400' : 'text-red-400'}`}>{plusvalia !== 0 ? formatCOP(plusvalia) : '—'}</p></div>
+          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Pagado</p><p className="text-cyan-400 font-mono font-bold text-sm mt-0.5">{formatCOP(pagadoHastaHoy)}</p></div>
+          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Cuota</p><p className="text-white font-mono text-sm mt-0.5">{inmueble.cuota_mensual ? formatCOP(inmueble.cuota_mensual) : '—'}</p></div>
+          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Cuotas</p><p className="text-white font-mono text-sm mt-0.5">{inmueble.cuotas_pagadas} / {inmueble.cuotas_totales || '?'}</p></div>
         </div>
       ) : (
         <p className="text-slate-500 text-sm">Click para agregar datos del inmueble</p>
       )}
-
       {inmueble && inmueble.cuotas_totales && (
         <div>
-          <div className="flex justify-between text-xs text-slate-400 mb-1">
-            <span>Progreso de cuotas</span>
-            <span>{progreso}%</span>
-          </div>
+          <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Progreso</span><span>{progreso}%</span></div>
           <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{ width: `${progreso}%`, backgroundColor: estadoColors[inmueble.estado] || '#6366f1' }}
-            />
+            <div className="h-full rounded-full transition-all" style={{ width: `${progreso}%`, backgroundColor: estadoColors[inmueble.estado] || '#6366f1' }} />
           </div>
         </div>
       )}

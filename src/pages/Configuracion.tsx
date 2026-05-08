@@ -1,10 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, RefreshCw } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { useAppStore } from '@/store/useAppStore'
 import { Categoria, Entidad, Moneda, PerfilRiesgo, TipoInversion } from '@/types'
 
 type TabConfig = 'entidades' | 'tipos' | 'riesgos' | 'categorias' | 'monedas'
+
+// Emojis predefinidos para categorías financieras
+const EMOJIS_DISPONIBLES = [
+  '💰', '💵', '💳', '🏦', '📈', '📉', '💹', '🎁',
+  '🏠', '🏢', '🏗️', '🚗', '🚌', '✈️', '🛒', '🍽️',
+  '💡', '📱', '💻', '🏥', '🎬', '🎮', '👕', '👗',
+  '🏛️', '📦', '🎓', '🐕', '🏋️', '🎣', '🏃', '🎵',
+  '🍺', '☕', '🎉', '💄', '🔧', '📚', '🌍', '⛽',
+]
 
 export function Configuracion() {
   const { cargarCatalogos } = useAppStore()
@@ -15,6 +24,8 @@ export function Configuracion() {
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [monedas, setMonedas] = useState<Moneda[]>([])
   const [subTabCat, setSubTabCat] = useState<'ingreso' | 'gasto'>('ingreso')
+  const [actualizandoTRM, setActualizandoTRM] = useState(false)
+  const [trmMensaje, setTrmMensaje] = useState('')
 
   // Edición inline
   const [editando, setEditando] = useState<any>(null)
@@ -50,6 +61,18 @@ export function Configuracion() {
     await window.electronAPI.deleteCatalogo(tabla, id)
     await cargar()
     await cargarCatalogos()
+  }
+
+  async function actualizarTasas() {
+    setActualizandoTRM(true)
+    setTrmMensaje('')
+    const result = await window.electronAPI.actualizarTRM()
+    setTrmMensaje(result.ok ? `✅ ${result.mensaje}` : `❌ ${result.mensaje}`)
+    if (result.ok) {
+      await cargar()
+      await cargarCatalogos()
+    }
+    setActualizandoTRM(false)
   }
 
   const tabs: { key: TabConfig; label: string }[] = [
@@ -147,7 +170,7 @@ export function Configuracion() {
               <p className="text-slate-500 text-xs mt-0.5">Categorías para ingresos y gastos</p>
             </div>
             <button
-              onClick={() => setNuevo({ tipo: subTabCat, color: '#6366f1' })}
+              onClick={() => setNuevo({ tipo: subTabCat, color: '#6366f1', emoji: '' })}
               className="flex items-center gap-1 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
               <Plus size={14} /> Agregar
             </button>
@@ -165,12 +188,8 @@ export function Configuracion() {
 
           {/* Fila nueva */}
           {nuevo && nuevo.tipo === subTabCat && (
-            <FilaEdicion
+            <FilaCategoriaEdicion
               data={nuevo}
-              campos={[
-                { key: 'nombre', label: 'Nombre', type: 'text', required: true },
-                { key: 'color', label: 'Color', type: 'color' },
-              ]}
               onChange={setNuevo}
               onGuardar={() => guardar('categorias', { ...nuevo, tipo: subTabCat })}
               onCancelar={() => setNuevo(null)}
@@ -183,12 +202,8 @@ export function Configuracion() {
             )}
             {categorias.filter(c => c.tipo === subTabCat).map(c => (
               editando?.id === c.id ? (
-                <FilaEdicion key={c.id}
+                <FilaCategoriaEdicion key={c.id}
                   data={editando}
-                  campos={[
-                    { key: 'nombre', label: 'Nombre', type: 'text', required: true },
-                    { key: 'color', label: 'Color', type: 'color' },
-                  ]}
                   onChange={setEditando}
                   onGuardar={() => guardar('categorias', editando)}
                   onCancelar={() => setEditando(null)}
@@ -196,6 +211,7 @@ export function Configuracion() {
               ) : (
                 <div key={c.id} className="flex items-center justify-between bg-slate-900 px-3 py-2.5 rounded-lg">
                   <div className="flex items-center gap-3">
+                    <span className="text-lg">{c.emoji || '•'}</span>
                     <div className="w-4 h-4 rounded-full border border-slate-600" style={{ backgroundColor: c.color }} />
                     <p className="text-white text-sm">{c.nombre}</p>
                   </div>
@@ -218,25 +234,130 @@ export function Configuracion() {
 
       {/* ── MONEDAS ── */}
       {tab === 'monedas' && (
-        <CatalogoTabla
-          titulo="Monedas"
-          descripcion="Monedas disponibles para registrar movimientos e inversiones"
-          items={monedas}
-          campos={[
-            { key: 'codigo', label: 'Código', type: 'text', required: true, placeholder: 'USD' },
-            { key: 'nombre', label: 'Nombre', type: 'text', required: true },
-            { key: 'simbolo', label: 'Símbolo', type: 'text', required: true, placeholder: 'US$' },
-            { key: 'tasa_a_cop', label: 'Tasa a COP', type: 'number', placeholder: '1' },
-          ]}
-          tabla="monedas"
-          onGuardar={guardar}
-          onEliminar={eliminar}
-          editando={editando}
-          setEditando={setEditando}
-          nuevo={nuevo}
-          setNuevo={setNuevo}
-        />
+        <>
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-white font-semibold">Tasas de cambio (TRM)</h3>
+                <p className="text-slate-500 text-xs mt-0.5">Se actualiza automáticamente al abrir la app · Fuente: open.er-api.com</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {trmMensaje && <span className="text-xs text-slate-400">{trmMensaje}</span>}
+                <button onClick={actualizarTasas} disabled={actualizandoTRM}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+                  <RefreshCw size={14} className={actualizandoTRM ? 'animate-spin' : ''} />
+                  {actualizandoTRM ? 'Actualizando...' : 'Actualizar TRM'}
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {monedas.map(m => (
+                <div key={m.id} className="bg-slate-900 p-3 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-mono font-bold">{m.codigo}</span>
+                    <span className="text-slate-400 text-xs">{m.nombre}</span>
+                  </div>
+                  <p className="text-indigo-400 font-mono text-lg mt-1">
+                    {m.codigo === 'COP' ? '—' : `$${m.tasa_a_cop.toLocaleString('es-CO')}`}
+                  </p>
+                  <p className="text-slate-500 text-xs mt-0.5">
+                    {m.codigo === 'COP' ? 'Moneda base' : `1 ${m.codigo} = ${m.tasa_a_cop.toLocaleString('es-CO')} COP`}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <CatalogoTabla
+            titulo="Gestión de monedas"
+            descripcion="Agrega o edita monedas disponibles"
+            items={monedas}
+            campos={[
+              { key: 'codigo', label: 'Código', type: 'text', required: true, placeholder: 'USD' },
+              { key: 'nombre', label: 'Nombre', type: 'text', required: true },
+              { key: 'simbolo', label: 'Símbolo', type: 'text', required: true, placeholder: 'US$' },
+              { key: 'tasa_a_cop', label: 'Tasa a COP', type: 'number', placeholder: '1' },
+            ]}
+            tabla="monedas"
+            onGuardar={guardar}
+            onEliminar={eliminar}
+            editando={editando}
+            setEditando={setEditando}
+            nuevo={nuevo}
+            setNuevo={setNuevo}
+          />
+        </>
       )}
+    </div>
+  )
+}
+
+// ── COMPONENTE: Fila edición categoría con emoji ────────
+
+interface FilaCategoriaEdicionProps {
+  data: any
+  onChange: (v: any) => void
+  onGuardar: () => void
+  onCancelar: () => void
+}
+
+function FilaCategoriaEdicion({ data, onChange, onGuardar, onCancelar }: FilaCategoriaEdicionProps) {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const valido = !!(data.nombre && data.nombre.trim())
+
+  return (
+    <div className="bg-indigo-500/10 border border-indigo-500/30 px-3 py-2 rounded-lg mb-2 space-y-2">
+      <div className="flex items-center gap-2">
+        {/* Emoji picker */}
+        <div className="relative">
+          <button
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="w-10 h-10 bg-slate-800 border border-slate-600 rounded-lg text-lg flex items-center justify-center hover:border-indigo-400 transition-colors"
+            title="Elegir emoji"
+          >
+            {data.emoji || '😀'}
+          </button>
+          {showEmojiPicker && (
+            <div className="absolute top-12 left-0 z-50 bg-slate-800 border border-slate-600 rounded-lg p-2 shadow-xl w-[280px]">
+              <div className="grid grid-cols-8 gap-1">
+                {EMOJIS_DISPONIBLES.map(e => (
+                  <button key={e}
+                    onClick={() => { onChange({ ...data, emoji: e }); setShowEmojiPicker(false) }}
+                    className="w-8 h-8 flex items-center justify-center text-lg hover:bg-slate-700 rounded transition-colors">
+                    {e}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => { onChange({ ...data, emoji: '' }); setShowEmojiPicker(false) }}
+                className="mt-2 w-full text-xs text-slate-400 hover:text-white py-1 bg-slate-700 rounded">
+                Sin emoji
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Color */}
+        <input type="color" value={data.color || '#6366f1'}
+          onChange={e => onChange({ ...data, color: e.target.value })}
+          className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent p-0" />
+
+        {/* Nombre */}
+        <input
+          placeholder="Nombre de la categoría"
+          value={data.nombre || ''}
+          onChange={e => onChange({ ...data, nombre: e.target.value })}
+          className="flex-1 text-sm py-1.5"
+        />
+
+        <button onClick={onGuardar} disabled={!valido}
+          className="p-1.5 bg-green-500/20 text-green-400 hover:bg-green-500/30 rounded transition-colors disabled:opacity-40 flex-shrink-0">
+          <Check size={15} />
+        </button>
+        <button onClick={onCancelar}
+          className="p-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded transition-colors flex-shrink-0">
+          <X size={15} />
+        </button>
+      </div>
     </div>
   )
 }

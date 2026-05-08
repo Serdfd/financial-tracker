@@ -45,7 +45,7 @@ export function CierreMensual() {
   function agregarIngreso() {
     const copId = monedas.find(m => m.codigo === 'COP')?.id || 1
     setIngresos(prev => [...prev, {
-      id: 0, mes_id: mes!.id, categoria_id: categorias.filter(c => c.tipo === 'ingreso')[0]?.id || 0,
+      id: 0, mes_id: mes!.id, categoria_id: 0,
       monto: 0, moneda_id: copId, nota: ''
     }])
   }
@@ -65,7 +65,7 @@ export function CierreMensual() {
   function agregarGasto() {
     const copId = monedas.find(m => m.codigo === 'COP')?.id || 1
     setGastos(prev => [...prev, {
-      id: 0, mes_id: mes!.id, categoria_id: categorias.filter(c => c.tipo === 'gasto')[0]?.id || 0,
+      id: 0, mes_id: mes!.id, categoria_id: 0,
       monto: 0, moneda_id: copId, nota: ''
     }])
   }
@@ -122,6 +122,17 @@ export function CierreMensual() {
     if (!confirm(`¿Cerrar ${MESES_NOMBRES[mesActivo]} ${anioActivo}? No podrás editar los datos.`)) return
     await window.electronAPI.cerrarMes(mes.id)
     await cargarDatos()
+  }
+
+  // Mejora 3: Validación por fila
+  function ingresoValido(ing: IngresoMes): boolean {
+    return !!(ing.categoria_id && ing.monto && ing.monto > 0)
+  }
+  function gastoValido(g: GastoMes): boolean {
+    return !!(g.categoria_id && g.monto && g.monto > 0)
+  }
+  function deudaValida(d: DeudaTC): boolean {
+    return !!(d.nombre_tc && d.nombre_tc.trim() && d.saldo && d.saldo > 0)
   }
 
   const totalIngresos = ingresos.reduce((s, i) => s + (i.monto || 0), 0)
@@ -199,11 +210,12 @@ export function CierreMensual() {
             {ingresos.length === 0 && <p className="text-slate-500 text-sm text-center py-6">No hay ingresos registrados</p>}
             {ingresos.map((ing, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-900 p-2 rounded-lg">
-                <select className="col-span-3" value={ing.categoria_id} disabled={cerrado}
+                <select className="col-span-3" value={ing.categoria_id || ''} disabled={cerrado}
                   onChange={e => setIngresos(prev => prev.map((x, i) => i === idx ? { ...x, categoria_id: Number(e.target.value) } : x))}>
-                  {categoriasIngreso.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  <option value="">Categoría *</option>
+                  {categoriasIngreso.map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
                 </select>
-                <input type="number" className="col-span-2" placeholder="Monto" value={ing.monto || ''} disabled={cerrado}
+                <input type="number" className="col-span-2" placeholder="Monto *" value={ing.monto || ''} disabled={cerrado}
                   onChange={e => setIngresos(prev => prev.map((x, i) => i === idx ? { ...x, monto: Number(e.target.value) } : x))} />
                 <select className="col-span-2" value={ing.moneda_id} disabled={cerrado}
                   onChange={e => setIngresos(prev => prev.map((x, i) => i === idx ? { ...x, moneda_id: Number(e.target.value) } : x))}>
@@ -213,7 +225,8 @@ export function CierreMensual() {
                   onChange={e => setIngresos(prev => prev.map((x, i) => i === idx ? { ...x, nota: e.target.value } : x))} />
                 {!cerrado && (
                   <>
-                    <button onClick={() => guardarIngreso(idx)} className="col-span-1 p-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors flex items-center justify-center">
+                    <button onClick={() => guardarIngreso(idx)} disabled={!ingresoValido(ing)}
+                      className="col-span-1 p-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">
                       <Save size={14} />
                     </button>
                     <button onClick={() => eliminarIngreso(ing.id, idx)} className="col-span-1 p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors flex items-center justify-center">
@@ -247,11 +260,12 @@ export function CierreMensual() {
             {gastos.length === 0 && <p className="text-slate-500 text-sm text-center py-6">No hay gastos registrados</p>}
             {gastos.map((g, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-900 p-2 rounded-lg">
-                <select className="col-span-3" value={g.categoria_id} disabled={cerrado}
+                <select className="col-span-3" value={g.categoria_id || ''} disabled={cerrado}
                   onChange={e => setGastos(prev => prev.map((x, i) => i === idx ? { ...x, categoria_id: Number(e.target.value) } : x))}>
-                  {categoriasGasto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  <option value="">Categoría *</option>
+                  {categoriasGasto.map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
                 </select>
-                <input type="number" className="col-span-2" placeholder="Monto" value={g.monto || ''} disabled={cerrado}
+                <input type="number" className="col-span-2" placeholder="Monto *" value={g.monto || ''} disabled={cerrado}
                   onChange={e => setGastos(prev => prev.map((x, i) => i === idx ? { ...x, monto: Number(e.target.value) } : x))} />
                 <select className="col-span-2" value={g.moneda_id} disabled={cerrado}
                   onChange={e => setGastos(prev => prev.map((x, i) => i === idx ? { ...x, moneda_id: Number(e.target.value) } : x))}>
@@ -261,7 +275,8 @@ export function CierreMensual() {
                   onChange={e => setGastos(prev => prev.map((x, i) => i === idx ? { ...x, nota: e.target.value } : x))} />
                 {!cerrado && (
                   <>
-                    <button onClick={() => guardarGasto(idx)} className="col-span-1 p-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors flex items-center justify-center">
+                    <button onClick={() => guardarGasto(idx)} disabled={!gastoValido(g)}
+                      className="col-span-1 p-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">
                       <Save size={14} />
                     </button>
                     <button onClick={() => eliminarGasto(g.id, idx)} className="col-span-1 p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors flex items-center justify-center">
@@ -296,10 +311,18 @@ export function CierreMensual() {
             <p className="text-slate-500 text-sm text-center py-6">No hay inversiones. Agrégalas en la sección Inversiones.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  <col className="w-[22%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                </colgroup>
                 <thead>
                   <tr className="text-slate-400 border-b border-slate-700">
-                    <th className="text-left py-2 pr-4">Inversión</th>
+                    <th className="text-left py-2 pr-2">Inversión</th>
                     <th className="text-right py-2 px-2">Saldo Cierre</th>
                     <th className="text-right py-2 px-2">Aportes</th>
                     <th className="text-right py-2 px-2">Retiros</th>
@@ -312,26 +335,26 @@ export function CierreMensual() {
                     const im = invMensual[inv.id] || { saldo_cierre: 0, aportes: 0, retiros: 0, rendimiento: 0, rentabilidad_pct: 0 }
                     return (
                       <tr key={inv.id} className="hover:bg-slate-700/30">
-                        <td className="py-2 pr-4">
+                        <td className="py-2 pr-2">
                           <div>
-                            <p className="text-white font-medium">{inv.nombre}</p>
-                            <p className="text-slate-500 text-xs">{inv.entidad_nombre} · {inv.moneda_codigo}</p>
+                            <p className="text-white font-medium truncate">{inv.nombre}</p>
+                            <p className="text-slate-500 text-xs truncate">{inv.entidad_nombre} · {inv.moneda_codigo}</p>
                           </div>
                         </td>
                         <td className="py-2 px-2">
                           <input type="number" disabled={cerrado} value={im.saldo_cierre || ''}
                             onChange={e => updateInvMensual(inv.id, 'saldo_cierre', Number(e.target.value))}
-                            className="w-28 text-right" placeholder="0" />
+                            className="w-full text-right" placeholder="0" />
                         </td>
                         <td className="py-2 px-2">
                           <input type="number" disabled={cerrado} value={im.aportes || ''}
                             onChange={e => updateInvMensual(inv.id, 'aportes', Number(e.target.value))}
-                            className="w-24 text-right" placeholder="0" />
+                            className="w-full text-right" placeholder="0" />
                         </td>
                         <td className="py-2 px-2">
                           <input type="number" disabled={cerrado} value={im.retiros || ''}
                             onChange={e => updateInvMensual(inv.id, 'retiros', Number(e.target.value))}
-                            className="w-24 text-right" placeholder="0" />
+                            className="w-full text-right" placeholder="0" />
                         </td>
                         <td className={`py-2 px-2 text-right font-mono font-medium ${im.rendimiento >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {formatCOP(im.rendimiento || 0)}
@@ -365,13 +388,14 @@ export function CierreMensual() {
             {deudas.length === 0 && <p className="text-slate-500 text-sm text-center py-6">No hay deudas de TC registradas</p>}
             {deudas.map((d, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-900 p-2 rounded-lg">
-                <input className="col-span-5" placeholder="Nombre de la tarjeta" value={d.nombre_tc} disabled={cerrado}
+                <input className="col-span-5" placeholder="Nombre de la tarjeta *" value={d.nombre_tc} disabled={cerrado}
                   onChange={e => setDeudas(prev => prev.map((x, i) => i === idx ? { ...x, nombre_tc: e.target.value } : x))} />
-                <input type="number" className="col-span-4" placeholder="Saldo pendiente" value={d.saldo || ''} disabled={cerrado}
+                <input type="number" className="col-span-4" placeholder="Saldo pendiente *" value={d.saldo || ''} disabled={cerrado}
                   onChange={e => setDeudas(prev => prev.map((x, i) => i === idx ? { ...x, saldo: Number(e.target.value) } : x))} />
                 {!cerrado && (
                   <>
-                    <button onClick={() => guardarDeuda(idx)} className="col-span-1 p-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors flex items-center justify-center">
+                    <button onClick={() => guardarDeuda(idx)} disabled={!deudaValida(d)}
+                      className="col-span-1 p-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">
                       <Save size={14} />
                     </button>
                     <button onClick={() => eliminarDeuda(d.id, idx)} className="col-span-2 p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors flex items-center justify-center">

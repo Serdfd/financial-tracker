@@ -26,6 +26,7 @@ export interface Categoria {
   nombre: string
   tipo: 'ingreso' | 'gasto'
   color: string
+  emoji: string
   activo: number
 }
 
@@ -150,6 +151,61 @@ export interface Inmueble {
   estado: string
 }
 
+// ── FICHAS TÉCNICAS ────────────────────────────────────
+export interface FichaInversion {
+  id: number
+  inversion_id: number
+  // CDT
+  tasa_ea?: number
+  fecha_vencimiento?: string
+  plazo_dias?: number
+  monto_inicial?: number
+  // Acciones
+  num_acciones?: number
+  precio_promedio?: number
+  mercado?: string
+  ticker?: string
+  // Crypto
+  cantidad_tokens?: number
+  token_symbol?: string
+  precio_promedio_crypto?: number
+}
+
+export interface LoteInversion {
+  id: number
+  inversion_id: number
+  fecha_compra: string
+  cantidad: number
+  precio_unitario: number
+  comision: number
+  nota?: string
+}
+
+export interface ResumenLotes {
+  total_unidades: number
+  costo_sin_comision: number
+  total_comisiones: number
+  costo_total: number
+  precio_promedio: number
+}
+
+export interface AlertaCDT {
+  nombre: string
+  inversion_id: number
+  entidad_nombre?: string
+  fecha_vencimiento: string
+  tasa_ea?: number
+  monto_inicial?: number
+  dias_restantes: number
+}
+
+// ── TRM ─────────────────────────────────────────────────
+export interface TRMResult {
+  ok: boolean
+  mensaje: string
+  fecha?: string
+}
+
 // ── DASHBOARD ──────────────────────────────────────────
 export interface DashboardData {
   ingresos: number
@@ -184,19 +240,27 @@ declare global {
       saveDeudaTC: (data: any) => Promise<void>
       deleteDeudaTC: (id: number) => Promise<void>
       getInversiones: () => Promise<Inversion[]>
-      saveInversion: (data: any) => Promise<void>
+      saveInversion: (data: any) => Promise<any>
       deleteInversion: (id: number) => Promise<void>
       getInversionMensual: (inversion_id: number) => Promise<InversionMensual[]>
       getInversionMensualMes: (mes_id: number) => Promise<InversionMensual[]>
       saveInversionMensual: (data: any) => Promise<void>
       getInmueble: (inversion_id: number) => Promise<Inmueble>
       saveInmueble: (data: any) => Promise<void>
+      getFichaInversion: (inversion_id: number) => Promise<FichaInversion | null>
+      saveFichaInversion: (data: any) => Promise<void>
+      getAlertasCDT: () => Promise<AlertaCDT[]>
+      getLotesInversion: (inversion_id: number) => Promise<LoteInversion[]>
+      saveLoteInversion: (data: any) => Promise<void>
+      deleteLoteInversion: (id: number) => Promise<void>
+      getResumenLotes: (inversion_id: number) => Promise<ResumenLotes>
       getPresupuestoFijos: () => Promise<PresupuestoFijo[]>
       savePresupuestoFijo: (data: any) => Promise<void>
       deletePresupuestoFijo: (id: number) => Promise<void>
       getPresupuestoVariables: () => Promise<PresupuestoVariable[]>
       savePresupuestoVariable: (data: any) => Promise<void>
       deletePresupuestoVariable: (id: number) => Promise<void>
+      actualizarTRM: () => Promise<TRMResult>
       getDashboardData: (anio: number, mes: number) => Promise<DashboardData>
     }
   }

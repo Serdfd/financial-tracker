@@ -29,8 +29,10 @@ export function getInversiones(): any[] {
   ))
 }
 
-export function saveInversion(data: any): void {
+export function saveInversion(data: any): any {
   const db = getDb()
+  let inversionId = data.id
+
   if (data.id) {
     db.run(
       `UPDATE inversiones SET nombre=?, entidad_id=?, tipo_id=?, riesgo_id=?,
@@ -45,8 +47,35 @@ export function saveInversion(data: any): void {
       [data.nombre, data.entidad_id, data.tipo_id, data.riesgo_id,
        data.moneda_id, data.estado || 'activo', data.fecha_inicio, data.notas]
     )
+    const lastId = rowsToObjects(db.exec('SELECT last_insert_rowid() as id'))
+    inversionId = lastId[0]?.id
+
+    // Saldo inicial OPCIONAL: solo si viene y es > 0
+    if (data.saldo_inicial && data.saldo_inicial > 0 && inversionId) {
+      const hoy = new Date()
+      const anio = hoy.getFullYear()
+      const mes = hoy.getMonth() + 1
+
+      db.run('INSERT OR IGNORE INTO meses (anio, mes) VALUES (?, ?)', [anio, mes])
+      const mesResult = rowsToObjects(db.exec(
+        'SELECT id FROM meses WHERE anio = ? AND mes = ?', [anio, mes]
+      ))
+      const mesId = mesResult[0]?.id
+
+      if (mesId) {
+        db.run(
+          `INSERT INTO inversion_mensual (inversion_id, mes_id, saldo_cierre, aportes, retiros, rendimiento, rentabilidad_pct)
+           VALUES (?,?,?,?,?,?,?)
+           ON CONFLICT(inversion_id, mes_id) DO UPDATE SET
+             saldo_cierre=excluded.saldo_cierre, aportes=excluded.aportes`,
+          [inversionId, mesId, data.saldo_inicial, data.saldo_inicial, 0, 0, 0]
+        )
+      }
+    }
   }
+
   guardarDb()
+  return { id: inversionId }
 }
 
 export function deleteInversion(id: number): void {
@@ -86,7 +115,6 @@ export function getInversionMensualMes(mes_id: number): any[] {
 export function saveInversionMensual(data: any): void {
   const db = getDb()
 
-  // Obtener saldo del mes anterior para calcular rendimiento
   const mesActual = rowsToObjects(db.exec(
     'SELECT anio, mes FROM meses WHERE id = ?', [data.mes_id]
   ))[0]
@@ -122,6 +150,8 @@ export function saveInversionMensual(data: any): void {
   guardarDb()
 }
 
+// ── INMUEBLES ──────────────────────────────────────────
+
 export function getInmueble(inversion_id: number): any {
   const db = getDb()
   const result = rowsToObjects(db.exec(
@@ -149,4 +179,121 @@ export function saveInmueble(data: any): void {
     )
   }
   guardarDb()
+}
+
+// ── FICHAS TÉCNICAS ────────────────────────────────────
+
+export function getFichaInversion(inversion_id: number): any {
+  const db = getDb()
+  const result = rowsToObjects(db.exec(
+    'SELECT * FROM fichas_inversion WHERE inversion_id = ?', [inversion_id]
+  ))
+  return result[0] || null
+}
+
+export function saveFichaInversion(data: any): void {
+  const db = getDb()
+  const v = (val: any) => val === undefined || val === '' ? null : val
+
+  const existing = rowsToObjects(db.exec(
+    'SELECT id FROM fichas_inversion WHERE inversion_id = ?', [data.inversion_id]
+  ))
+
+  if (existing.length > 0) {
+    db.run(
+      `UPDATE fichas_inversion SET
+        tasa_ea=?, fecha_vencimiento=?, plazo_dias=?, monto_inicial=?,
+        num_acciones=?, precio_promedio=?, mercado=?, ticker=?,
+        cantidad_tokens=?, token_symbol=?, precio_promedio_crypto=?
+       WHERE inversion_id=?`,
+      [v(data.tasa_ea), v(data.fecha_vencimiento), v(data.plazo_dias), v(data.monto_inicial),
+       v(data.num_acciones), v(data.precio_promedio), v(data.mercado), v(data.ticker),
+       v(data.cantidad_tokens), v(data.token_symbol), v(data.precio_promedio_crypto),
+       data.inversion_id]
+    )
+  } else {
+    db.run(
+      `INSERT INTO fichas_inversion (inversion_id, tasa_ea, fecha_vencimiento, plazo_dias, monto_inicial,
+        num_acciones, precio_promedio, mercado, ticker,
+        cantidad_tokens, token_symbol, precio_promedio_crypto)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [data.inversion_id, v(data.tasa_ea), v(data.fecha_vencimiento), v(data.plazo_dias), v(data.monto_inicial),
+       v(data.num_acciones), v(data.precio_promedio), v(data.mercado), v(data.ticker),
+       v(data.cantidad_tokens), v(data.token_symbol), v(data.precio_promedio_crypto)]
+    )
+  }
+  guardarDb()
+}
+
+// ── LOTES DE COMPRA ────────────────────────────────────
+
+export function getLotesInversion(inversion_id: number): any[] {
+  const db = getDb()
+  return rowsToObjects(db.exec(
+    'SELECT * FROM lotes_inversion WHERE inversion_id = ? ORDER BY fecha_compra DESC',
+    [inversion_id]
+  ))
+}
+
+export function saveLoteInversion(data: any): void {
+  const db = getDb()
+  if (data.id) {
+    db.run(
+      `UPDATE lotes_inversion SET fecha_compra=?, cantidad=?, precio_unitario=?, comision=?, nota=? WHERE id=?`,
+      [data.fecha_compra, data.cantidad, data.precio_unitario, data.comision || 0, data.nota || null, data.id]
+    )
+  } else {
+    db.run(
+      `INSERT INTO lotes_inversion (inversion_id, fecha_compra, cantidad, precio_unitario, comision, nota)
+       VALUES (?,?,?,?,?,?)`,
+      [data.inversion_id, data.fecha_compra, data.cantidad, data.precio_unitario, data.comision || 0, data.nota || null]
+    )
+  }
+  guardarDb()
+}
+
+export function deleteLoteInversion(id: number): void {
+  const db = getDb()
+  db.run('DELETE FROM lotes_inversion WHERE id = ?', [id])
+  guardarDb()
+}
+
+export function getResumenLotes(inversion_id: number): any {
+  const db = getDb()
+  const result = rowsToObjects(db.exec(
+    `SELECT
+       COALESCE(SUM(cantidad), 0) as total_unidades,
+       COALESCE(SUM(cantidad * precio_unitario), 0) as costo_sin_comision,
+       COALESCE(SUM(comision), 0) as total_comisiones,
+       COALESCE(SUM(cantidad * precio_unitario) + SUM(comision), 0) as costo_total,
+       CASE WHEN SUM(cantidad) > 0
+         THEN SUM(cantidad * precio_unitario) / SUM(cantidad)
+         ELSE 0 END as precio_promedio
+     FROM lotes_inversion WHERE inversion_id = ?`,
+    [inversion_id]
+  ))
+  return result[0] || { total_unidades: 0, costo_sin_comision: 0, total_comisiones: 0, costo_total: 0, precio_promedio: 0 }
+}
+
+// ── ALERTAS CDT ────────────────────────────────────────
+
+export function getAlertasCDT(): any[] {
+  const db = getDb()
+  const hoy = new Date().toISOString().split('T')[0]
+  return rowsToObjects(db.exec(
+    `SELECT inv.nombre, inv.id as inversion_id, e.nombre as entidad_nombre,
+       f.fecha_vencimiento, f.tasa_ea, f.monto_inicial,
+       julianday(f.fecha_vencimiento) - julianday(?) as dias_restantes
+     FROM fichas_inversion f
+     JOIN inversiones inv ON f.inversion_id = inv.id
+     LEFT JOIN entidades e ON inv.entidad_id = e.id
+     LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
+     WHERE inv.activo = 1
+       AND t.nombre = 'CDT'
+       AND f.fecha_vencimiento IS NOT NULL
+       AND f.fecha_vencimiento != ''
+       AND julianday(f.fecha_vencimiento) - julianday(?) BETWEEN -7 AND 30
+     ORDER BY f.fecha_vencimiento`,
+    [hoy, hoy]
+  ))
 }
