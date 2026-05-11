@@ -163,13 +163,24 @@ function crearTablas() {
     CREATE TABLE IF NOT EXISTS inmuebles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       inversion_id INTEGER NOT NULL REFERENCES inversiones(id),
-      precio_compra REAL NOT NULL,
+      -- General
+      precio_compra_total REAL NOT NULL,
       valor_estimado_actual REAL,
-      cuota_mensual REAL,
-      cuotas_totales INTEGER,
-      cuotas_pagadas INTEGER DEFAULT 0,
+      estado TEXT DEFAULT 'en_construccion',
       fecha_entrega_estimada TEXT,
-      estado TEXT DEFAULT 'en_construccion'
+      -- Etapa 1: Separación
+      monto_separacion REAL DEFAULT 0,
+      -- Etapa 2: Cuota inicial
+      cuota_inicial_total REAL DEFAULT 0,
+      cuota_inicial_num_cuotas INTEGER DEFAULT 0,
+      cuota_inicial_valor_cuota REAL DEFAULT 0,
+      cuota_inicial_cuotas_pagadas INTEGER DEFAULT 0,
+      -- Etapa 3: Financiación
+      financiacion_entidad_id INTEGER REFERENCES entidades(id),
+      financiacion_monto REAL DEFAULT 0,
+      financiacion_plazo_meses INTEGER DEFAULT 0,
+      financiacion_valor_cuota REAL DEFAULT 0,
+      financiacion_cuotas_pagadas INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS fichas_inversion (
@@ -254,6 +265,35 @@ function migraciones() {
     const columnasFicha = infoFicha[0].values.map((row: any[]) => row[1])
     if (!columnasFicha.includes('retencion_pct')) {
       db.run("ALTER TABLE fichas_inversion ADD COLUMN retencion_pct REAL DEFAULT 4")
+    }
+  }
+
+  // Migración: reestructurar tabla inmuebles con las 3 etapas
+  const infoInmueble = db.exec("PRAGMA table_info(inmuebles)")
+  if (infoInmueble.length) {
+    const columnasInmueble = infoInmueble[0].values.map((row: any[]) => row[1])
+
+    // Primero agregar precio_compra_total si no existe
+    if (!columnasInmueble.includes('precio_compra_total')) {
+      db.run("ALTER TABLE inmuebles ADD COLUMN precio_compra_total REAL DEFAULT 0")
+      // Copiar datos del campo viejo si existe
+      if (columnasInmueble.includes('precio_compra')) {
+        db.run("UPDATE inmuebles SET precio_compra_total = precio_compra")
+      }
+    }
+
+    // Luego agregar el resto de columnas nuevas
+    if (!columnasInmueble.includes('monto_separacion')) {
+      db.run("ALTER TABLE inmuebles ADD COLUMN monto_separacion REAL DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_total REAL DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_num_cuotas INTEGER DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_valor_cuota REAL DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_cuotas_pagadas INTEGER DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_entidad_id INTEGER")
+      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_monto REAL DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_plazo_meses INTEGER DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_valor_cuota REAL DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_cuotas_pagadas INTEGER DEFAULT 0")
     }
   }
 }

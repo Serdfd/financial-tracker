@@ -142,13 +142,24 @@ export interface InversionMensual {
 export interface Inmueble {
   id: number
   inversion_id: number
-  precio_compra: number
+  // General
+  precio_compra_total: number
   valor_estimado_actual?: number
-  cuota_mensual?: number
-  cuotas_totales?: number
-  cuotas_pagadas: number
-  fecha_entrega_estimada?: string
   estado: string
+  fecha_entrega_estimada?: string
+  // Etapa 1: Separación
+  monto_separacion: number
+  // Etapa 2: Cuota inicial
+  cuota_inicial_total: number
+  cuota_inicial_num_cuotas: number
+  cuota_inicial_valor_cuota: number
+  cuota_inicial_cuotas_pagadas: number
+  // Etapa 3: Financiación
+  financiacion_entidad_id?: number
+  financiacion_monto: number
+  financiacion_plazo_meses: number
+  financiacion_valor_cuota: number
+  financiacion_cuotas_pagadas: number
 }
 
 // ── FICHAS TÉCNICAS ────────────────────────────────────
@@ -194,9 +205,11 @@ export interface AlertaCDT {
   nombre: string
   inversion_id: number
   entidad_nombre?: string
+  fecha_inicio?: string
   fecha_vencimiento: string
   tasa_ea?: number
-  monto_inicial?: number
+  plazo_dias?: number
+  retencion_pct?: number
   dias_restantes: number
 }
 
@@ -213,6 +226,8 @@ export interface DashboardData {
   gastos: number
   rendimientos: number
   patrimonioNeto: number
+  patrimonioInversiones: number   // nuevo — inversiones financieras
+  patrimonioInmuebles: number     // nuevo — valor estimado inmuebles
   deudasTC: number
   ultimos6Meses: { anio: number; mes: number; ingresos: number; gastos: number }[]
   ultimos12Meses: { anio: number; mes: number; patrimonio: number }[]

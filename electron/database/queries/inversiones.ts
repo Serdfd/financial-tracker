@@ -155,27 +155,58 @@ export function saveInversionMensual(data: any): void {
 export function getInmueble(inversion_id: number): any {
   const db = getDb()
   const result = rowsToObjects(db.exec(
-    'SELECT * FROM inmuebles WHERE inversion_id = ?', [inversion_id]
+    `SELECT inm.*, e.nombre as financiacion_entidad_nombre
+     FROM inmuebles inm
+     LEFT JOIN entidades e ON inm.financiacion_entidad_id = e.id
+     WHERE inm.inversion_id = ?`, [inversion_id]
   ))
   return result[0] || null
 }
 
 export function saveInmueble(data: any): void {
   const db = getDb()
+  const v = (val: any) => val === undefined || val === '' ? null : val
+
   if (data.id) {
     db.run(
-      `UPDATE inmuebles SET precio_compra=?, valor_estimado_actual=?, cuota_mensual=?,
-       cuotas_totales=?, cuotas_pagadas=?, fecha_entrega_estimada=?, estado=? WHERE id=?`,
-      [data.precio_compra, data.valor_estimado_actual, data.cuota_mensual,
-       data.cuotas_totales, data.cuotas_pagadas, data.fecha_entrega_estimada, data.estado, data.id]
+      `UPDATE inmuebles SET
+        precio_compra=?, precio_compra_total=?, valor_estimado_actual=?, estado=?, fecha_entrega_estimada=?,
+        monto_separacion=?,
+        cuota_inicial_total=?, cuota_inicial_num_cuotas=?, cuota_inicial_valor_cuota=?, cuota_inicial_cuotas_pagadas=?,
+        financiacion_entidad_id=?, financiacion_monto=?, financiacion_plazo_meses=?,
+        financiacion_valor_cuota=?, financiacion_cuotas_pagadas=?
+       WHERE id=?`,
+      [
+        data.precio_compra_total, data.precio_compra_total,
+        v(data.valor_estimado_actual), data.estado || 'en_construccion', v(data.fecha_entrega_estimada),
+        data.monto_separacion || 0,
+        data.cuota_inicial_total || 0, data.cuota_inicial_num_cuotas || 0,
+        data.cuota_inicial_valor_cuota || 0, data.cuota_inicial_cuotas_pagadas || 0,
+        v(data.financiacion_entidad_id), data.financiacion_monto || 0,
+        data.financiacion_plazo_meses || 0, data.financiacion_valor_cuota || 0,
+        data.financiacion_cuotas_pagadas || 0,
+        data.id
+      ]
     )
   } else {
     db.run(
-      `INSERT INTO inmuebles (inversion_id, precio_compra, valor_estimado_actual, cuota_mensual,
-       cuotas_totales, cuotas_pagadas, fecha_entrega_estimada, estado)
-       VALUES (?,?,?,?,?,?,?,?)`,
-      [data.inversion_id, data.precio_compra, data.valor_estimado_actual, data.cuota_mensual,
-       data.cuotas_totales, data.cuotas_pagadas || 0, data.fecha_entrega_estimada, data.estado || 'en_construccion']
+      `INSERT INTO inmuebles (
+        inversion_id, precio_compra, precio_compra_total, valor_estimado_actual, estado, fecha_entrega_estimada,
+        monto_separacion,
+        cuota_inicial_total, cuota_inicial_num_cuotas, cuota_inicial_valor_cuota, cuota_inicial_cuotas_pagadas,
+        financiacion_entidad_id, financiacion_monto, financiacion_plazo_meses,
+        financiacion_valor_cuota, financiacion_cuotas_pagadas)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        data.inversion_id, data.precio_compra_total, data.precio_compra_total,
+        v(data.valor_estimado_actual), data.estado || 'en_construccion', v(data.fecha_entrega_estimada),
+        data.monto_separacion || 0,
+        data.cuota_inicial_total || 0, data.cuota_inicial_num_cuotas || 0,
+        data.cuota_inicial_valor_cuota || 0, data.cuota_inicial_cuotas_pagadas || 0,
+        v(data.financiacion_entidad_id), data.financiacion_monto || 0,
+        data.financiacion_plazo_meses || 0, data.financiacion_valor_cuota || 0,
+        data.financiacion_cuotas_pagadas || 0
+      ]
     )
   }
   guardarDb()

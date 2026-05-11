@@ -139,9 +139,9 @@ export function Dashboard() {
             </div>
           )}
 
-          {/* Métricas */}
+         {/* Métricas principales */}
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            <MetricCard titulo="Patrimonio Neto" valor={formatCOP(data?.patrimonioNeto || 0)}
+            <MetricCard titulo="Patrimonio Total" valor={formatCOP(data?.patrimonioNeto || 0)}
               subtitulo={nombreMes(mesActivo, anioActivo)} icono={<Wallet size={20} />} colorIcono="text-indigo-400" />
             <MetricCard titulo="Ingresos del Mes" valor={formatCOP(data?.ingresos || 0)}
               icono={<TrendingUp size={20} />} colorIcono="text-green-400" />
@@ -150,6 +150,28 @@ export function Dashboard() {
             <MetricCard titulo="Rendimientos" valor={formatCOP(data?.rendimientos || 0)}
               icono={<DollarSign size={20} />} colorIcono="text-cyan-400" />
           </div>
+
+          {/* Desglose del patrimonio */}
+          <Card>
+            <h3 className="text-white font-semibold text-sm mb-3">Composición del patrimonio</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="bg-slate-900 rounded-lg p-3">
+                <p className="text-slate-400 text-xs mb-1">Inversiones financieras</p>
+                <p className="text-white font-mono font-bold">{formatCOP(data?.patrimonioInversiones || 0)}</p>
+                <p className="text-slate-500 text-xs mt-0.5">CDTs, acciones, crypto, FICs</p>
+              </div>
+              <div className="bg-slate-900 rounded-lg p-3">
+                <p className="text-slate-400 text-xs mb-1">Inmuebles</p>
+                <p className="text-white font-mono font-bold">{formatCOP(data?.patrimonioInmuebles || 0)}</p>
+                <p className="text-slate-500 text-xs mt-0.5">Valor estimado actual</p>
+              </div>
+              <div className="bg-slate-900 rounded-lg p-3">
+                <p className="text-slate-400 text-xs mb-1">Deudas TC</p>
+                <p className="text-red-400 font-mono font-bold">−{formatCOP(data?.deudasTC || 0)}</p>
+                <p className="text-slate-500 text-xs mt-0.5">Saldo tarjetas de crédito</p>
+              </div>
+            </div>
+          </Card>
 
           {/* Crecimiento */}
           <Card className="flex items-center gap-4">

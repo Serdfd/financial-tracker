@@ -149,13 +149,18 @@ export function Inversiones() {
     return t === 'acciones' || t === 'crypto'
   }
 
+function getTipoNombre(tipo_id: number | undefined): string {
+  if (!tipo_id) return ''
+  return tiposInversion.find(t => t.id === tipo_id)?.nombre?.toLowerCase() || ''
+}
+
 function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 'sinficha' | 'otro' {
   if (!inv?.tipo_nombre) return 'otro'
   const t = inv.tipo_nombre.toLowerCase()
   if (t === 'cdt') return 'cdt'
   if (t === 'acciones') return 'acciones'
   if (t === 'crypto') return 'crypto'
-  if (t === 'fic' || t === 'cuenta ahorro alto rendimiento') return 'sinficha'
+  if (t === 'fic' || t === 'cuenta ahorro alto rendimiento' || t === 'inmueble') return 'sinficha'
   return 'otro'
 }
 
@@ -524,8 +529,8 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
             </div>
           </div>
 
-          {/* Saldo inicial OPCIONAL */}
-          {!form.id && (
+          {/* Saldo inicial OPCIONAL — no aplica para inmuebles */}
+          {!form.id && getTipoNombre(form.tipo_id) !== 'inmueble' && (
             <div>
               <label className="text-slate-400 text-sm block mb-1">Saldo inicial <span className="text-slate-600">(opcional)</span></label>
               <input type="number" value={form.saldo_inicial || ''} placeholder="¿Cuánto vale hoy tu posición? (0 si es nueva)"
@@ -762,53 +767,156 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
       </Modal>
 
       {/* Modal inmueble */}
-      <Modal open={modalInmueble} onClose={() => setModalInmueble(false)} titulo={`Inmueble — ${seleccionada?.nombre}`} ancho="max-w-xl">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-slate-400 text-sm block mb-1">Precio de compra <span className="text-red-400">*</span></label>
-              <input type="number" value={formInmueble.precio_compra || ''} placeholder="0"
-                onChange={e => setFormInmueble(p => ({ ...p, precio_compra: Number(e.target.value) }))} />
-            </div>
-            <div>
-              <label className="text-slate-400 text-sm block mb-1">Valor estimado actual</label>
-              <input type="number" value={formInmueble.valor_estimado_actual || ''} placeholder="0"
-                onChange={e => setFormInmueble(p => ({ ...p, valor_estimado_actual: Number(e.target.value) }))} />
-            </div>
-            <div>
-              <label className="text-slate-400 text-sm block mb-1">Cuota mensual</label>
-              <input type="number" value={formInmueble.cuota_mensual || ''} placeholder="0"
-                onChange={e => setFormInmueble(p => ({ ...p, cuota_mensual: Number(e.target.value) }))} />
-            </div>
-            <div>
-              <label className="text-slate-400 text-sm block mb-1">Cuotas totales</label>
-              <input type="number" value={formInmueble.cuotas_totales || ''} placeholder="0"
-                onChange={e => setFormInmueble(p => ({ ...p, cuotas_totales: Number(e.target.value) }))} />
-            </div>
-            <div>
-              <label className="text-slate-400 text-sm block mb-1">Cuotas pagadas</label>
-              <input type="number" value={formInmueble.cuotas_pagadas || 0}
-                onChange={e => setFormInmueble(p => ({ ...p, cuotas_pagadas: Number(e.target.value) }))} />
-            </div>
-            <div>
-              <label className="text-slate-400 text-sm block mb-1">Fecha entrega estimada</label>
-              <input type="date" value={formInmueble.fecha_entrega_estimada || ''}
-                onChange={e => setFormInmueble(p => ({ ...p, fecha_entrega_estimada: e.target.value }))} />
-            </div>
-            <div className="col-span-2">
-              <label className="text-slate-400 text-sm block mb-1">Estado</label>
-              <select value={formInmueble.estado || 'en_construccion'}
-                onChange={e => setFormInmueble(p => ({ ...p, estado: e.target.value }))}>
-                <option value="en_construccion">En construcción</option>
-                <option value="recibido">Recibido</option>
-                <option value="en_arriendo">En arriendo</option>
-                <option value="vendido">Vendido</option>
-              </select>
+      <Modal open={modalInmueble} onClose={() => setModalInmueble(false)}
+        titulo={`Inmueble — ${seleccionada?.nombre}`} ancho="max-w-2xl">
+        <div className="space-y-5">
+
+          {/* General */}
+          <div>
+            <p className="text-indigo-400 text-xs font-semibold uppercase mb-3">Datos generales</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Precio de compra total <span className="text-red-400">*</span></label>
+                <input type="number" value={formInmueble.precio_compra_total || ''}
+                  placeholder="0"
+                  onChange={e => setFormInmueble(p => ({ ...p, precio_compra_total: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Valor estimado actual</label>
+                <input type="number" value={formInmueble.valor_estimado_actual || ''}
+                  placeholder="0 — actualizar cuando se conozca"
+                  onChange={e => setFormInmueble(p => ({ ...p, valor_estimado_actual: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Fecha entrega estimada</label>
+                <input type="date" value={formInmueble.fecha_entrega_estimada || ''}
+                  onChange={e => setFormInmueble(p => ({ ...p, fecha_entrega_estimada: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Estado</label>
+                <select value={formInmueble.estado || 'en_construccion'}
+                  onChange={e => setFormInmueble(p => ({ ...p, estado: e.target.value }))}>
+                  <option value="en_construccion">En construcción</option>
+                  <option value="recibido">Recibido</option>
+                  <option value="en_arriendo">En arriendo</option>
+                  <option value="vendido">Vendido</option>
+                </select>
+              </div>
             </div>
           </div>
+
+          {/* Etapa 1 */}
+          <div>
+            <p className="text-amber-400 text-xs font-semibold uppercase mb-3">Etapa 1 — Separación</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-slate-400 text-sm block mb-1">Monto de separación</label>
+                <input type="number" value={formInmueble.monto_separacion || ''}
+                  placeholder="0"
+                  onChange={e => setFormInmueble(p => ({ ...p, monto_separacion: Number(e.target.value) }))} />
+              </div>
+            </div>
+          </div>
+
+          {/* Etapa 2 */}
+          <div>
+            <p className="text-cyan-400 text-xs font-semibold uppercase mb-3">Etapa 2 — Cuota inicial (30%)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Total cuota inicial</label>
+                <input type="number" value={formInmueble.cuota_inicial_total || ''}
+                  placeholder="0"
+                  onChange={e => setFormInmueble(p => ({ ...p, cuota_inicial_total: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Número de cuotas</label>
+                <input type="number" value={formInmueble.cuota_inicial_num_cuotas || ''}
+                  placeholder="0"
+                  onChange={e => setFormInmueble(p => ({ ...p, cuota_inicial_num_cuotas: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Valor por cuota</label>
+                <input type="number" value={formInmueble.cuota_inicial_valor_cuota || ''}
+                  placeholder="0"
+                  onChange={e => setFormInmueble(p => ({ ...p, cuota_inicial_valor_cuota: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Cuotas pagadas</label>
+                <input type="number" value={formInmueble.cuota_inicial_cuotas_pagadas || 0}
+                  onChange={e => setFormInmueble(p => ({ ...p, cuota_inicial_cuotas_pagadas: Number(e.target.value) }))} />
+              </div>
+            </div>
+            {/* Progreso cuota inicial */}
+            {(formInmueble.cuota_inicial_num_cuotas || 0) > 0 && (
+              <div className="mt-2">
+                <div className="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>Progreso cuota inicial</span>
+                  <span>{Math.round(((formInmueble.cuota_inicial_cuotas_pagadas || 0) / (formInmueble.cuota_inicial_num_cuotas || 1)) * 100)}%</span>
+                </div>
+                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-cyan-500 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, Math.round(((formInmueble.cuota_inicial_cuotas_pagadas || 0) / (formInmueble.cuota_inicial_num_cuotas || 1)) * 100))}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Etapa 3 */}
+          <div>
+            <p className="text-green-400 text-xs font-semibold uppercase mb-3">Etapa 3 — Financiación (70%)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-slate-400 text-sm block mb-1">Entidad financiera</label>
+                <select value={formInmueble.financiacion_entidad_id || ''}
+                  onChange={e => setFormInmueble(p => ({ ...p, financiacion_entidad_id: Number(e.target.value) || undefined }))}>
+                  <option value="">Sin entidad</option>
+                  {entidades.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Monto financiado</label>
+                <input type="number" value={formInmueble.financiacion_monto || ''}
+                  placeholder="0"
+                  onChange={e => setFormInmueble(p => ({ ...p, financiacion_monto: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Plazo (meses)</label>
+                <input type="number" value={formInmueble.financiacion_plazo_meses || ''}
+                  placeholder="120, 180, 240..."
+                  onChange={e => setFormInmueble(p => ({ ...p, financiacion_plazo_meses: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Valor cuota mensual</label>
+                <input type="number" value={formInmueble.financiacion_valor_cuota || ''}
+                  placeholder="0"
+                  onChange={e => setFormInmueble(p => ({ ...p, financiacion_valor_cuota: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Cuotas pagadas</label>
+                <input type="number" value={formInmueble.financiacion_cuotas_pagadas || 0}
+                  onChange={e => setFormInmueble(p => ({ ...p, financiacion_cuotas_pagadas: Number(e.target.value) }))} />
+              </div>
+            </div>
+            {/* Progreso financiación */}
+            {(formInmueble.financiacion_plazo_meses || 0) > 0 && (
+              <div className="mt-2">
+                <div className="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>Progreso financiación</span>
+                  <span>{Math.round(((formInmueble.financiacion_cuotas_pagadas || 0) / (formInmueble.financiacion_plazo_meses || 1)) * 100)}%</span>
+                </div>
+                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, Math.round(((formInmueble.financiacion_cuotas_pagadas || 0) / (formInmueble.financiacion_plazo_meses || 1)) * 100))}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => setModalInmueble(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
-            <button onClick={guardarInmueble} disabled={!formInmueble.precio_compra}
+            <button onClick={() => setModalInmueble(false)}
+              className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
+            <button onClick={guardarInmueble}
+              disabled={!formInmueble.precio_compra_total}
               className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed">
               Guardar
             </button>
@@ -820,7 +928,6 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
 }
 
 // ── InmuebleCard ────────────────────────────────────────
-
 function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: () => void }) {
   const [inmueble, setInmueble] = useState<Inmueble | null>(null)
 
@@ -828,26 +935,42 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
     window.electronAPI.getInmueble(inversion.id).then(setInmueble)
   }, [inversion.id])
 
-  const plusvalia = inmueble ? (inmueble.valor_estimado_actual || 0) - inmueble.precio_compra : 0
-  const progreso = inmueble && inmueble.cuotas_totales
-    ? Math.round((inmueble.cuotas_pagadas / inmueble.cuotas_totales) * 100) : 0
-  const pagadoHastaHoy = inmueble ? (inmueble.cuota_mensual || 0) * inmueble.cuotas_pagadas : 0
+  const plusvalia = inmueble
+    ? (inmueble.valor_estimado_actual || 0) - inmueble.precio_compra_total : 0
+
+  const progresoCuotaInicial = inmueble && inmueble.cuota_inicial_num_cuotas
+    ? Math.round((inmueble.cuota_inicial_cuotas_pagadas / inmueble.cuota_inicial_num_cuotas) * 100) : 0
+
+  const progresoFinanciacion = inmueble && inmueble.financiacion_plazo_meses
+    ? Math.round((inmueble.financiacion_cuotas_pagadas / inmueble.financiacion_plazo_meses) * 100) : 0
+
+  const pagadoSeparacion = inmueble?.monto_separacion || 0
+  const pagadoCuotaInicial = inmueble
+    ? (inmueble.cuota_inicial_valor_cuota || 0) * inmueble.cuota_inicial_cuotas_pagadas : 0
+  const pagadoFinanciacion = inmueble
+    ? (inmueble.financiacion_valor_cuota || 0) * inmueble.financiacion_cuotas_pagadas : 0
+  const totalPagado = pagadoSeparacion + pagadoCuotaInicial + pagadoFinanciacion
 
   const estadoColors: Record<string, string> = {
     en_construccion: '#eab308', recibido: '#22c55e', en_arriendo: '#06b6d4', vendido: '#8b5cf6',
   }
   const estadoLabels: Record<string, string> = {
-    en_construccion: 'En construcción', recibido: 'Recibido', en_arriendo: 'En arriendo', vendido: 'Vendido',
+    en_construccion: 'En construcción', recibido: 'Recibido',
+    en_arriendo: 'En arriendo', vendido: 'Vendido',
   }
 
   return (
-    <Card onClick={onClick} className="space-y-4">
+    <Card onClick={onClick} className="space-y-4 cursor-pointer">
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Building2 size={16} className="text-indigo-400" />
             <p className="text-white font-semibold">{inversion.nombre}</p>
-            {inmueble && <Badge label={estadoLabels[inmueble.estado] || inmueble.estado} color={estadoColors[inmueble.estado] || '#6366f1'} />}
+            {inmueble && (
+              <Badge label={estadoLabels[inmueble.estado] || inmueble.estado}
+                color={estadoColors[inmueble.estado] || '#6366f1'} />
+            )}
           </div>
           <p className="text-slate-500 text-xs">{inversion.entidad_nombre || 'Sin entidad'}</p>
         </div>
@@ -858,25 +981,90 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
           </div>
         )}
       </div>
+
       {inmueble ? (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Precio compra</p><p className="text-white font-mono font-bold text-sm mt-0.5">{formatCOP(inmueble.precio_compra)}</p></div>
-          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Valor actual</p><p className="text-white font-mono font-bold text-sm mt-0.5">{inmueble.valor_estimado_actual ? formatCOP(inmueble.valor_estimado_actual) : '—'}</p></div>
-          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Plusvalía</p><p className={`font-mono font-bold text-sm mt-0.5 ${plusvalia >= 0 ? 'text-green-400' : 'text-red-400'}`}>{plusvalia !== 0 ? formatCOP(plusvalia) : '—'}</p></div>
-          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Pagado</p><p className="text-cyan-400 font-mono font-bold text-sm mt-0.5">{formatCOP(pagadoHastaHoy)}</p></div>
-          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Cuota</p><p className="text-white font-mono text-sm mt-0.5">{inmueble.cuota_mensual ? formatCOP(inmueble.cuota_mensual) : '—'}</p></div>
-          <div className="bg-slate-900 p-3 rounded-lg"><p className="text-slate-400 text-xs">Cuotas</p><p className="text-white font-mono text-sm mt-0.5">{inmueble.cuotas_pagadas} / {inmueble.cuotas_totales || '?'}</p></div>
-        </div>
+        <>
+          {/* Métricas generales */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-slate-900 p-3 rounded-lg">
+              <p className="text-slate-400 text-xs">Precio compra</p>
+              <p className="text-white font-mono font-bold text-sm mt-0.5">{formatCOP(inmueble.precio_compra_total)}</p>
+            </div>
+            <div className="bg-slate-900 p-3 rounded-lg">
+              <p className="text-slate-400 text-xs">Valor actual</p>
+              <p className="text-white font-mono font-bold text-sm mt-0.5">
+                {inmueble.valor_estimado_actual ? formatCOP(inmueble.valor_estimado_actual) : '—'}
+              </p>
+            </div>
+            <div className="bg-slate-900 p-3 rounded-lg">
+              <p className="text-slate-400 text-xs">Plusvalía</p>
+              <p className={`font-mono font-bold text-sm mt-0.5 ${plusvalia > 0 ? 'text-green-400' : plusvalia < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                {inmueble.valor_estimado_actual ? formatCOP(plusvalia) : '—'}
+              </p>
+            </div>
+          </div>
+
+          {/* Etapas */}
+          <div className="space-y-3">
+            {/* Etapa 1 */}
+            {inmueble.monto_separacion > 0 && (
+              <div className="bg-slate-900 p-3 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <p className="text-amber-400 text-xs font-semibold">Etapa 1 — Separación</p>
+                  <p className="text-white font-mono text-xs">{formatCOP(inmueble.monto_separacion)}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Etapa 2 */}
+            {inmueble.cuota_inicial_num_cuotas > 0 && (
+              <div className="bg-slate-900 p-3 rounded-lg space-y-2">
+                <div className="flex justify-between items-center">
+                  <p className="text-cyan-400 text-xs font-semibold">Etapa 2 — Cuota inicial</p>
+                  <p className="text-white text-xs font-mono">
+                    {inmueble.cuota_inicial_cuotas_pagadas} / {inmueble.cuota_inicial_num_cuotas} cuotas
+                  </p>
+                </div>
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>Pagado: <span className="text-white font-mono">{formatCOP(pagadoCuotaInicial)}</span></span>
+                  <span>Cuota: <span className="text-white font-mono">{formatCOP(inmueble.cuota_inicial_valor_cuota)}</span></span>
+                </div>
+                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-cyan-500 rounded-full transition-all"
+                    style={{ width: `${progresoCuotaInicial}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Etapa 3 */}
+            {inmueble.financiacion_plazo_meses > 0 && (
+              <div className="bg-slate-900 p-3 rounded-lg space-y-2">
+                <div className="flex justify-between items-center">
+                  <p className="text-green-400 text-xs font-semibold">Etapa 3 — Financiación</p>
+                  <p className="text-white text-xs font-mono">
+                    {inmueble.financiacion_cuotas_pagadas} / {inmueble.financiacion_plazo_meses} cuotas
+                  </p>
+                </div>
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>Pagado: <span className="text-white font-mono">{formatCOP(pagadoFinanciacion)}</span></span>
+                  <span>Cuota: <span className="text-white font-mono">{formatCOP(inmueble.financiacion_valor_cuota)}</span></span>
+                </div>
+                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full transition-all"
+                    style={{ width: `${progresoFinanciacion}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Total pagado */}
+          <div className="flex justify-between items-center pt-1 border-t border-slate-700">
+            <p className="text-slate-400 text-xs">Total desembolsado</p>
+            <p className="text-white font-mono font-bold text-sm">{formatCOP(totalPagado)}</p>
+          </div>
+        </>
       ) : (
         <p className="text-slate-500 text-sm">Click para agregar datos del inmueble</p>
-      )}
-      {inmueble && inmueble.cuotas_totales && (
-        <div>
-          <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Progreso</span><span>{progreso}%</span></div>
-          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${progreso}%`, backgroundColor: estadoColors[inmueble.estado] || '#6366f1' }} />
-          </div>
-        </div>
       )}
     </Card>
   )

@@ -164,12 +164,29 @@ function registerIpcHandlers() {
     ))
     const deudasTC = deudasResult[0]?.total || 0
 
-    const patrimonioResult = rowsToObjects(db.exec(
+    // Inversiones financieras (excluyendo inmuebles)
+    const patrimonioInvResult = rowsToObjects(db.exec(
       `SELECT COALESCE(SUM(im.saldo_cierre * mo.tasa_a_cop), 0) as total
-       FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
-       LEFT JOIN monedas mo ON inv.moneda_id = mo.id WHERE im.mes_id = ?`, [mesActual.id]
+       FROM inversion_mensual im
+       JOIN inversiones inv ON im.inversion_id = inv.id
+       LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
+       LEFT JOIN monedas mo ON inv.moneda_id = mo.id
+       WHERE im.mes_id = ? AND LOWER(t.nombre) != 'inmueble'`, [mesActual.id]
     ))
-    const patrimonioNeto = (patrimonioResult[0]?.total || 0) - deudasTC
+    const patrimonioInversiones = patrimonioInvResult[0]?.total || 0
+
+    // Inmuebles — suma valor_estimado_actual de todos los inmuebles activos
+    const patrimonioInmResult = rowsToObjects(db.exec(
+      `SELECT COALESCE(SUM(inm.valor_estimado_actual), 0) as total
+       FROM inmuebles inm
+       JOIN inversiones inv ON inm.inversion_id = inv.id
+       WHERE inv.activo = 1
+         AND inm.valor_estimado_actual IS NOT NULL
+         AND inm.valor_estimado_actual > 0`
+    ))
+    const patrimonioInmuebles = patrimonioInmResult[0]?.total || 0
+
+    const patrimonioNeto = patrimonioInversiones + patrimonioInmuebles - deudasTC
 
     const ultimos6Meses = rowsToObjects(db.exec(
       `SELECT m.anio, m.mes,
@@ -181,11 +198,19 @@ function registerIpcHandlers() {
        ORDER BY m.anio DESC, m.mes DESC LIMIT 6`, [anio, mes]
     )).reverse()
 
+    // ultimos12Meses — incluye inmuebles en el patrimonio histórico
     const ultimos12Meses = rowsToObjects(db.exec(
       `SELECT m.anio, m.mes,
          COALESCE((SELECT SUM(im.saldo_cierre * mo.tasa_a_cop)
                    FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
-                   LEFT JOIN monedas mo ON inv.moneda_id = mo.id WHERE im.mes_id = m.id), 0) -
+                   LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
+                   LEFT JOIN monedas mo ON inv.moneda_id = mo.id
+                   WHERE im.mes_id = m.id AND LOWER(t.nombre) != 'inmueble'), 0) +
+         COALESCE((SELECT SUM(inm.valor_estimado_actual)
+                   FROM inmuebles inm JOIN inversiones inv ON inm.inversion_id = inv.id
+                   WHERE inv.activo = 1
+                     AND inm.valor_estimado_actual IS NOT NULL
+                     AND inm.valor_estimado_actual > 0), 0) -
          COALESCE((SELECT SUM(saldo) FROM deudas_tc WHERE mes_id = m.id), 0) as patrimonio
        FROM meses m WHERE (m.anio * 12 + m.mes) <= (? * 12 + ?)
        ORDER BY m.anio DESC, m.mes DESC LIMIT 12`, [anio, mes]
@@ -215,7 +240,9 @@ function registerIpcHandlers() {
     ))
 
     return {
-      ingresos, gastos, rendimientos, patrimonioNeto, deudasTC,
+      ingresos, gastos, rendimientos, patrimonioNeto,
+      patrimonioInversiones, patrimonioInmuebles,
+      deudasTC,
       ultimos6Meses, ultimos12Meses,
       distribucionInversiones, distribucionTipos, distribucionRiesgo
     }
