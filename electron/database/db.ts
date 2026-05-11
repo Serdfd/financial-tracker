@@ -180,6 +180,7 @@ function crearTablas() {
       fecha_vencimiento TEXT,
       plazo_dias INTEGER,
       monto_inicial REAL,
+      retencion_pct REAL DEFAULT 4,
       -- Acciones
       num_acciones REAL,
       precio_promedio REAL,
@@ -246,6 +247,15 @@ function migraciones() {
       nota TEXT
     )
   `)
+
+  // Migración: agregar retencion_pct a fichas_inversion
+  const infoFicha = db.exec("PRAGMA table_info(fichas_inversion)")
+  if (infoFicha.length) {
+    const columnasFicha = infoFicha[0].values.map((row: any[]) => row[1])
+    if (!columnasFicha.includes('retencion_pct')) {
+      db.run("ALTER TABLE fichas_inversion ADD COLUMN retencion_pct REAL DEFAULT 4")
+    }
+  }
 }
 
 function insertarSemilla() {

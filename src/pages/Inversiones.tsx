@@ -149,14 +149,15 @@ export function Inversiones() {
     return t === 'acciones' || t === 'crypto'
   }
 
-  function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 'otro' {
-    if (!inv?.tipo_nombre) return 'otro'
-    const t = inv.tipo_nombre.toLowerCase()
-    if (t === 'cdt') return 'cdt'
-    if (t === 'acciones') return 'acciones'
-    if (t === 'crypto') return 'crypto'
-    return 'otro'
-  }
+function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 'sinficha' | 'otro' {
+  if (!inv?.tipo_nombre) return 'otro'
+  const t = inv.tipo_nombre.toLowerCase()
+  if (t === 'cdt') return 'cdt'
+  if (t === 'acciones') return 'acciones'
+  if (t === 'crypto') return 'crypto'
+  if (t === 'fic' || t === 'cuenta ahorro alto rendimiento') return 'sinficha'
+  return 'otro'
+}
 
   // Calcular rendimiento basado en lotes
   const ultimoSaldo = historial.length > 0 ? historial[historial.length - 1].saldo_cierre : 0
@@ -320,14 +321,31 @@ export function Inversiones() {
               )}
 
               {/* Ficha técnica resumen (CDT u otros) */}
-              {ficha && !tieneModeloLotes(seleccionada) && (
+             {ficha && !tieneModeloLotes(seleccionada) && getTipoFicha(seleccionada) === 'cdt' && (() => {
+                const fechaVenc = (() => {
+                  if (!seleccionada?.fecha_inicio || !ficha.plazo_dias) return null
+                  const d = new Date(seleccionada.fecha_inicio)
+                  d.setDate(d.getDate() + Number(ficha.plazo_dias))
+                  return d.toISOString().split('T')[0]
+                })()
+                return (
+                  <div className="mt-3 bg-slate-900 p-3 rounded-lg">
+                    <p className="text-slate-400 text-xs mb-2 flex items-center gap-1"><FileText size={12} /> Ficha técnica CDT</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {ficha.tasa_ea && <div><span className="text-slate-500">Tasa EA:</span> <span className="text-green-400 font-mono">{ficha.tasa_ea}%</span></div>}
+                      {ficha.plazo_dias && <div><span className="text-slate-500">Plazo:</span> <span className="text-white">{ficha.plazo_dias} días</span></div>}
+                      {ficha.retencion_pct !== undefined && <div><span className="text-slate-500">Retención:</span> <span className="text-white">{ficha.retencion_pct}%</span></div>}
+                      {fechaVenc && <div><span className="text-slate-500">Vence:</span> <span className="text-amber-400">{fechaVenc}</span></div>}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {ficha && !tieneModeloLotes(seleccionada) && getTipoFicha(seleccionada) !== 'cdt' && (
                 <div className="mt-3 bg-slate-900 p-3 rounded-lg">
                   <p className="text-slate-400 text-xs mb-2 flex items-center gap-1"><FileText size={12} /> Ficha técnica</p>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     {ficha.tasa_ea && <div><span className="text-slate-500">Tasa EA:</span> <span className="text-green-400 font-mono">{ficha.tasa_ea}%</span></div>}
-                    {ficha.fecha_vencimiento && <div><span className="text-slate-500">Vence:</span> <span className="text-white">{ficha.fecha_vencimiento}</span></div>}
-                    {ficha.plazo_dias && <div><span className="text-slate-500">Plazo:</span> <span className="text-white">{ficha.plazo_dias} días</span></div>}
-                    {ficha.monto_inicial && <div><span className="text-slate-500">Monto inicial:</span> <span className="text-white font-mono">{formatCOP(ficha.monto_inicial)}</span></div>}
                   </div>
                 </div>
               )}
@@ -350,7 +368,7 @@ export function Inversiones() {
                     className="flex items-center gap-1.5 px-3 py-2 text-indigo-400 hover:bg-indigo-500/20 rounded-lg transition-colors text-sm">
                     <Pencil size={14} /> Editar
                   </button>
-                  {!tieneModeloLotes(seleccionada) && (
+                  {!tieneModeloLotes(seleccionada) && getTipoFicha(seleccionada) !== 'sinficha' &&(
                     <button onClick={abrirModalFicha}
                       className="flex items-center gap-1.5 px-3 py-2 text-cyan-400 hover:bg-cyan-500/20 rounded-lg transition-colors text-sm">
                       <FileText size={14} /> Ficha
@@ -599,33 +617,83 @@ export function Inversiones() {
       <Modal open={modalFicha} onClose={() => setModalFicha(false)}
         titulo={`${tieneModeloLotes(seleccionada) ? 'Datos de referencia' : 'Ficha Técnica'} — ${seleccionada?.nombre}`} ancho="max-w-lg">
         <div className="space-y-4">
-          {getTipoFicha(seleccionada) === 'cdt' && (
-            <>
-              <p className="text-indigo-400 text-xs font-semibold uppercase">CDT / Renta fija</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-400 text-sm block mb-1">Tasa EA (%)</label>
-                  <input type="number" step="0.01" value={formFicha.tasa_ea || ''} placeholder="Ej: 12.5"
-                    onChange={e => setFormFicha(p => ({ ...p, tasa_ea: Number(e.target.value) }))} />
+          {getTipoFicha(seleccionada) === 'cdt' && (() => {
+            // Calcular fecha de vencimiento al vuelo
+            const fechaVencimiento = (() => {
+              if (!seleccionada?.fecha_inicio || !formFicha.plazo_dias) return null
+              const d = new Date(seleccionada.fecha_inicio)
+              d.setDate(d.getDate() + Number(formFicha.plazo_dias))
+              return d.toISOString().split('T')[0]
+            })()
+
+            // Calcular rendimientos al vuelo usando saldo_cierre del primer mes
+            const montoBase = historial.length > 0 ? historial[0].saldo_cierre : 0
+            const tasaEA = formFicha.tasa_ea || 0
+            const plazo = formFicha.plazo_dias || 0
+            const retencion = formFicha.retencion_pct ?? 4
+            const rendBruto = montoBase * (tasaEA / 100) * (plazo / 365)
+            const retFuente = rendBruto * (retencion / 100)
+            const rendNeto = rendBruto - retFuente
+            const valorVencimiento = montoBase + rendNeto
+
+            return (
+              <>
+                <p className="text-indigo-400 text-xs font-semibold uppercase">CDT / Renta fija</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Tasa EA (%)</label>
+                    <input type="number" step="0.01" value={formFicha.tasa_ea || ''} placeholder="Ej: 12.5"
+                      onChange={e => setFormFicha(p => ({ ...p, tasa_ea: Number(e.target.value) }))} />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Plazo (días)</label>
+                    <input type="number" value={formFicha.plazo_dias || ''} placeholder="90, 180, 360..."
+                      onChange={e => setFormFicha(p => ({ ...p, plazo_dias: Number(e.target.value) }))} />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Retención en la fuente (%)</label>
+                    <input type="number" step="0.1" value={formFicha.retencion_pct ?? 4} placeholder="4"
+                      onChange={e => setFormFicha(p => ({ ...p, retencion_pct: Number(e.target.value) }))} />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-sm block mb-1">Fecha vencimiento</label>
+                    <div className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                      {fechaVencimiento
+                        ? <span className="text-white">{fechaVencimiento}</span>
+                        : <span className="text-slate-500 text-xs">Requiere fecha inicio y plazo</span>}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-slate-400 text-sm block mb-1">Fecha vencimiento</label>
-                  <input type="date" value={formFicha.fecha_vencimiento || ''}
-                    onChange={e => setFormFicha(p => ({ ...p, fecha_vencimiento: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="text-slate-400 text-sm block mb-1">Plazo (días)</label>
-                  <input type="number" value={formFicha.plazo_dias || ''} placeholder="90, 180, 360..."
-                    onChange={e => setFormFicha(p => ({ ...p, plazo_dias: Number(e.target.value) }))} />
-                </div>
-                <div>
-                  <label className="text-slate-400 text-sm block mb-1">Monto inicial</label>
-                  <input type="number" value={formFicha.monto_inicial || ''} placeholder="0"
-                    onChange={e => setFormFicha(p => ({ ...p, monto_inicial: Number(e.target.value) }))} />
-                </div>
-              </div>
-            </>
-          )}
+
+                {/* Proyección de rendimientos */}
+                {montoBase > 0 && tasaEA > 0 && plazo > 0 && (
+                  <div className="bg-slate-900 rounded-lg p-3 space-y-1.5 text-xs mt-1">
+                    <p className="text-slate-400 font-semibold mb-2">Proyección al vencimiento</p>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Monto invertido:</span>
+                      <span className="text-white font-mono">{formatCOP(montoBase)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Rendimiento bruto:</span>
+                      <span className="text-green-400 font-mono">+{formatCOP(rendBruto)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Retención ({retencion}%):</span>
+                      <span className="text-red-400 font-mono">−{formatCOP(retFuente)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-700 pt-1.5">
+                      <span className="text-slate-400 font-semibold">Rendimiento neto:</span>
+                      <span className="text-green-400 font-mono font-semibold">+{formatCOP(rendNeto)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-semibold">Valor al vencimiento:</span>
+                      <span className="text-white font-mono font-semibold">{formatCOP(valorVencimiento)}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          })()}
 
           {getTipoFicha(seleccionada) === 'acciones' && (
             <>

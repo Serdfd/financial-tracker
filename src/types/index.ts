@@ -157,9 +157,10 @@ export interface FichaInversion {
   inversion_id: number
   // CDT
   tasa_ea?: number
-  fecha_vencimiento?: string
   plazo_dias?: number
-  monto_inicial?: number
+  retencion_pct?: number   // nuevo — default 4%
+  // monto_inicial eliminado — se toma del saldo inicial
+  // fecha_vencimiento eliminado — se calcula: fecha_inicio + plazo_dias
   // Acciones
   num_acciones?: number
   precio_promedio?: number

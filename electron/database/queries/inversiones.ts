@@ -202,22 +202,23 @@ export function saveFichaInversion(data: any): void {
   if (existing.length > 0) {
     db.run(
       `UPDATE fichas_inversion SET
-        tasa_ea=?, fecha_vencimiento=?, plazo_dias=?, monto_inicial=?,
+        tasa_ea=?, plazo_dias=?, retencion_pct=?,
         num_acciones=?, precio_promedio=?, mercado=?, ticker=?,
         cantidad_tokens=?, token_symbol=?, precio_promedio_crypto=?
        WHERE inversion_id=?`,
-      [v(data.tasa_ea), v(data.fecha_vencimiento), v(data.plazo_dias), v(data.monto_inicial),
+      [v(data.tasa_ea), v(data.plazo_dias), v(data.retencion_pct) ?? 4,
        v(data.num_acciones), v(data.precio_promedio), v(data.mercado), v(data.ticker),
        v(data.cantidad_tokens), v(data.token_symbol), v(data.precio_promedio_crypto),
        data.inversion_id]
     )
   } else {
     db.run(
-      `INSERT INTO fichas_inversion (inversion_id, tasa_ea, fecha_vencimiento, plazo_dias, monto_inicial,
+      `INSERT INTO fichas_inversion (
+        inversion_id, tasa_ea, plazo_dias, retencion_pct,
         num_acciones, precio_promedio, mercado, ticker,
         cantidad_tokens, token_symbol, precio_promedio_crypto)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [data.inversion_id, v(data.tasa_ea), v(data.fecha_vencimiento), v(data.plazo_dias), v(data.monto_inicial),
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [data.inversion_id, v(data.tasa_ea), v(data.plazo_dias), v(data.retencion_pct) ?? 4,
        v(data.num_acciones), v(data.precio_promedio), v(data.mercado), v(data.ticker),
        v(data.cantidad_tokens), v(data.token_symbol), v(data.precio_promedio_crypto)]
     )
@@ -280,20 +281,24 @@ export function getResumenLotes(inversion_id: number): any {
 export function getAlertasCDT(): any[] {
   const db = getDb()
   const hoy = new Date().toISOString().split('T')[0]
+  // La fecha de vencimiento se calcula en el frontend: fecha_inicio + plazo_dias
+  // Aquí calculamos con SQL para la alerta
   return rowsToObjects(db.exec(
-    `SELECT inv.nombre, inv.id as inversion_id, e.nombre as entidad_nombre,
-       f.fecha_vencimiento, f.tasa_ea, f.monto_inicial,
-       julianday(f.fecha_vencimiento) - julianday(?) as dias_restantes
+    `SELECT inv.nombre, inv.id as inversion_id, inv.fecha_inicio,
+       e.nombre as entidad_nombre,
+       f.tasa_ea, f.plazo_dias, f.retencion_pct,
+       date(inv.fecha_inicio, '+' || f.plazo_dias || ' days') as fecha_vencimiento,
+       julianday(date(inv.fecha_inicio, '+' || f.plazo_dias || ' days')) - julianday(?) as dias_restantes
      FROM fichas_inversion f
      JOIN inversiones inv ON f.inversion_id = inv.id
      LEFT JOIN entidades e ON inv.entidad_id = e.id
      LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
      WHERE inv.activo = 1
        AND t.nombre = 'CDT'
-       AND f.fecha_vencimiento IS NOT NULL
-       AND f.fecha_vencimiento != ''
-       AND julianday(f.fecha_vencimiento) - julianday(?) BETWEEN -7 AND 30
-     ORDER BY f.fecha_vencimiento`,
+       AND inv.fecha_inicio IS NOT NULL
+       AND f.plazo_dias IS NOT NULL
+       AND julianday(date(inv.fecha_inicio, '+' || f.plazo_dias || ' days')) - julianday(?) BETWEEN -7 AND 30
+     ORDER BY fecha_vencimiento`,
     [hoy, hoy]
   ))
 }
