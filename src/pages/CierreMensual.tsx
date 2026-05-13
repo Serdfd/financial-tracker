@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Plus, Trash2, Save, Lock, ChevronDown } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Plus, Trash2, Save, Lock, Upload, CheckCircle, AlertCircle, X } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import { Modal } from '@/components/ui/Modal'
 import { useAppStore } from '@/store/useAppStore'
 import { Mes, IngresoMes, GastoMes, DeudaTC, InversionMensual, Inversion } from '@/types'
 import { formatCOP, formatPct, MESES_NOMBRES } from '@/lib/format'
@@ -17,6 +18,113 @@ export function CierreMensual() {
   const [inversiones, setInversiones] = useState<Inversion[]>([])
   const [invMensual, setInvMensual] = useState<Record<number, InversionMensual>>({})
   const [guardando, setGuardando] = useState(false)
+
+  // ── IMPORTACIÓN CSV ──────────────────────────────────
+  const inputCsvRef = useRef<HTMLInputElement>(null)
+  const [modalCsv, setModalCsv] = useState(false)
+  const [csvRows, setCsvRows] = useState<{
+    nombre: string
+    monto: number
+    categoria_id: number | null  // null = no encontrada
+    omitir: boolean
+  }[]>([])
+  const [importando, setImportando] = useState(false)
+
+  function fixEncoding(str: string): string {
+    // Corrige Latin-1 interpretado como UTF-8 (ej: CategorÃ­a → Categoría)
+    try {
+      return decodeURIComponent(escape(str))
+    } catch {
+      return str
+    }
+  }
+
+  function parsearMonto(str: string): number {
+    // "79,800.00" → 79800
+    return parseFloat(str.replace(/,/g, '')) || 0
+  }
+
+function procesarCsv(contenido: string) {
+  const categoriasGasto = categorias.filter(c => c.tipo === 'gasto')
+  const lineas = contenido.split('\n').map(l => l.trim()).filter(l => l)
+
+  // Encontrar la línea del header ("", "Categoría", "Cantidad")
+  const headerIdx = lineas.findIndex(l =>
+    l.toLowerCase().includes('categor') && l.toLowerCase().includes('cantidad')
+  )
+  if (headerIdx === -1) {
+    alert('No se encontró el encabezado esperado (Categoría, Cantidad) en el CSV.')
+    return
+  }
+
+  // Parsear líneas de datos después del header
+  const datos = lineas.slice(headerIdx + 1)
+
+  const filas = datos.map(linea => {
+    // Extraer campos entre comillas: "idx", "Nombre", "Monto"
+    const matches = [...linea.matchAll(/"([^"]*)"/g)].map(m => m[1])
+    if (matches.length < 3) return null
+
+    const nombre = matches[1].trim()
+    const monto = parsearMonto(matches[2])
+
+    if (!nombre || monto <= 0) return null
+
+    const cat = categoriasGasto.find(
+      c => c.nombre.toLowerCase().trim() === nombre.toLowerCase().trim()
+    )
+
+    return { nombre, monto, categoria_id: cat?.id || null, omitir: false }
+  }).filter(Boolean) as typeof csvRows
+
+  if (filas.length === 0) {
+    alert('No se encontraron filas válidas en el CSV.')
+    return
+  }
+
+  setCsvRows(filas)
+  setModalCsv(true)
+}
+
+  function onArchivoSeleccionado(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0]
+    if (!archivo) return
+
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const contenido = ev.target?.result as string
+      procesarCsv(contenido)
+    }
+    reader.readAsText(archivo, 'UTF-8')
+    // Reset input para poder subir el mismo archivo otra vez
+    e.target.value = ''
+  }
+
+  async function confirmarImportacion() {
+    if (!mes) return
+    setImportando(true)
+    const copId = monedas.find(m => m.codigo === 'COP')?.id || 1
+
+    const filasValidas = csvRows.filter(r => !r.omitir && r.categoria_id && r.monto > 0)
+    for (const fila of filasValidas) {
+      await window.electronAPI.saveGastoMes({
+        id: 0,
+        mes_id: mes.id,
+        categoria_id: fila.categoria_id!,
+        monto: fila.monto,
+        moneda_id: copId,
+        nota: `Importado: ${fila.nombre}`
+      })
+    }
+
+    await cargarDatos()
+    setModalCsv(false)
+    setCsvRows([])
+    setImportando(false)
+  }
+
+  const filasNoEncontradas = csvRows.filter(r => !r.categoria_id && !r.omitir).length
+  const filasListas = csvRows.filter(r => !r.omitir && r.categoria_id && r.monto > 0).length
 
   useEffect(() => { cargarDatos() }, [mesActivo, anioActivo])
 
@@ -251,9 +359,24 @@ export function CierreMensual() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-white font-semibold">Gastos del mes</h3>
             {!cerrado && (
-              <button onClick={agregarGasto} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
-                <Plus size={14} /> Agregar
-              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputCsvRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={onArchivoSeleccionado}
+                />
+                <button
+                  onClick={() => inputCsvRef.current?.click()}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors"
+                >
+                  <Upload size={14} /> Importar CSV
+                </button>
+                <button onClick={agregarGasto} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
+                  <Plus size={14} /> Agregar
+                </button>
+              </div>
             )}
           </div>
           <div className="space-y-2">
@@ -410,9 +533,113 @@ export function CierreMensual() {
             <div className="mt-4 pt-3 border-t border-slate-700 flex justify-end">
               <span className="text-slate-400 text-sm">Total deuda: <span className="text-red-400 font-mono font-bold">{formatCOP(totalDeudas)}</span></span>
             </div>
-          )}
-        </Card>
+         )}
+      </Card>
       )}
+
+      {/* ── MODAL IMPORTAR CSV ── */}
+      <Modal open={modalCsv} onClose={() => { setModalCsv(false); setCsvRows([]) }}
+        titulo="Importar gastos desde CSV" ancho="max-w-2xl">
+        <div className="space-y-4">
+
+          {/* Resumen */}
+          <div className="flex items-center gap-4 text-sm">
+            <span className="flex items-center gap-1.5 text-green-400">
+              <CheckCircle size={14} />
+              {filasListas} listas para importar
+            </span>
+            {filasNoEncontradas > 0 && (
+              <span className="flex items-center gap-1.5 text-amber-400">
+                <AlertCircle size={14} />
+                {filasNoEncontradas} categorías no encontradas
+              </span>
+            )}
+          </div>
+
+          {/* Tabla de preview */}
+          <div className="max-h-96 overflow-y-auto space-y-1">
+            {csvRows.map((fila, idx) => {
+              const categoriasGasto = categorias.filter(c => c.tipo === 'gasto')
+              const encontrada = !!fila.categoria_id
+              return (
+                <div key={idx} className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg text-sm ${
+                  fila.omitir ? 'opacity-40' : encontrada ? 'bg-slate-900' : 'bg-amber-500/10 border border-amber-500/30'
+                }`}>
+                  <div className="col-span-1 flex justify-center">
+                    {fila.omitir
+                      ? <X size={14} className="text-slate-500" />
+                      : encontrada
+                        ? <CheckCircle size={14} className="text-green-400" />
+                        : <AlertCircle size={14} className="text-amber-400" />
+                    }
+                  </div>
+                  <div className="col-span-3 text-slate-400 truncate" title={fila.nombre}>
+                    {fila.nombre}
+                  </div>
+                  <div className="col-span-2 text-white font-mono text-right">
+                    {formatCOP(fila.monto)}
+                  </div>
+                  <div className="col-span-4">
+                    {encontrada
+                      ? <span className="text-green-400 text-xs">
+                          {categoriasGasto.find(c => c.id === fila.categoria_id)?.emoji || ''} {categoriasGasto.find(c => c.id === fila.categoria_id)?.nombre}
+                        </span>
+                      : (
+                        <select
+                          value={fila.categoria_id || ''}
+                          className="w-full text-xs"
+                          onChange={e => setCsvRows(prev => prev.map((r, i) =>
+                            i === idx ? { ...r, categoria_id: Number(e.target.value) || null } : r
+                          ))}>
+                          <option value="">Seleccionar...</option>
+                          {categoriasGasto.map(c => (
+                            <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>
+                          ))}
+                        </select>
+                      )
+                    }
+                  </div>
+                  <div className="col-span-2 flex justify-end">
+                    <button
+                      onClick={() => setCsvRows(prev => prev.map((r, i) =>
+                        i === idx ? { ...r, omitir: !r.omitir } : r
+                      ))}
+                      className={`text-xs px-2 py-0.5 rounded transition-colors ${
+                        fila.omitir
+                          ? 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                          : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                      }`}
+                    >
+                      {fila.omitir ? 'Incluir' : 'Omitir'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Acciones */}
+          <div className="flex justify-between items-center pt-2 border-t border-slate-700">
+            <button
+              onClick={() => { setModalCsv(false); setCsvRows([]) }}
+              className="px-4 py-2 text-slate-400 hover:text-white text-sm">
+              Cancelar
+            </button>
+            <button
+              onClick={confirmarImportacion}
+              disabled={importando || filasListas === 0 || filasNoEncontradas > 0}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+              {importando ? 'Importando...' : `Importar ${filasListas} gastos`}
+            </button>
+          </div>
+
+          {filasNoEncontradas > 0 && (
+            <p className="text-amber-400 text-xs text-center">
+              Asigna una categoría a todas las filas marcadas en amarillo para poder importar.
+            </p>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }
