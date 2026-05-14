@@ -171,6 +171,7 @@ export function saveInmueble(data: any): void {
     db.run(
       `UPDATE inmuebles SET
         precio_compra=?, precio_compra_total=?, valor_estimado_actual=?, estado=?, fecha_entrega_estimada=?,
+        tipo_precio=?, smlv_pactados=?,
         monto_separacion=?,
         cuota_inicial_total=?, cuota_inicial_num_cuotas=?, cuota_inicial_valor_cuota=?, cuota_inicial_cuotas_pagadas=?,
         financiacion_entidad_id=?, financiacion_monto=?, financiacion_plazo_meses=?,
@@ -179,6 +180,7 @@ export function saveInmueble(data: any): void {
       [
         data.precio_compra_total, data.precio_compra_total,
         v(data.valor_estimado_actual), data.estado || 'en_construccion', v(data.fecha_entrega_estimada),
+        data.tipo_precio || 'fijo', data.smlv_pactados || 0,
         data.monto_separacion || 0,
         data.cuota_inicial_total || 0, data.cuota_inicial_num_cuotas || 0,
         data.cuota_inicial_valor_cuota || 0, data.cuota_inicial_cuotas_pagadas || 0,
@@ -192,14 +194,16 @@ export function saveInmueble(data: any): void {
     db.run(
       `INSERT INTO inmuebles (
         inversion_id, precio_compra, precio_compra_total, valor_estimado_actual, estado, fecha_entrega_estimada,
+        tipo_precio, smlv_pactados,
         monto_separacion,
         cuota_inicial_total, cuota_inicial_num_cuotas, cuota_inicial_valor_cuota, cuota_inicial_cuotas_pagadas,
         financiacion_entidad_id, financiacion_monto, financiacion_plazo_meses,
         financiacion_valor_cuota, financiacion_cuotas_pagadas)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         data.inversion_id, data.precio_compra_total, data.precio_compra_total,
         v(data.valor_estimado_actual), data.estado || 'en_construccion', v(data.fecha_entrega_estimada),
+        data.tipo_precio || 'fijo', data.smlv_pactados || 0,
         data.monto_separacion || 0,
         data.cuota_inicial_total || 0, data.cuota_inicial_num_cuotas || 0,
         data.cuota_inicial_valor_cuota || 0, data.cuota_inicial_cuotas_pagadas || 0,
@@ -332,4 +336,35 @@ export function getAlertasCDT(): any[] {
      ORDER BY fecha_vencimiento`,
     [hoy, hoy]
   ))
+}
+
+// ── PAGOS INMUEBLE ──────────────────────────────────────
+export function getPagosInmueble(inmueble_id: number): any[] {
+  const db = getDb()
+  return rowsToObjects(db.exec(
+    'SELECT * FROM pagos_inmueble WHERE inmueble_id = ? ORDER BY fecha DESC',
+    [inmueble_id]
+  ))
+}
+
+export function savePagoInmueble(data: any): void {
+  const db = getDb()
+  if (data.id) {
+    db.run(
+      'UPDATE pagos_inmueble SET fecha=?, monto=?, etapa=?, nota=? WHERE id=?',
+      [data.fecha, data.monto, data.etapa, data.nota || null, data.id]
+    )
+  } else {
+    db.run(
+      'INSERT INTO pagos_inmueble (inmueble_id, fecha, monto, etapa, nota) VALUES (?,?,?,?,?)',
+      [data.inmueble_id, data.fecha, data.monto, data.etapa, data.nota || null]
+    )
+  }
+  guardarDb()
+}
+
+export function deletePagoInmueble(id: number): void {
+  const db = getDb()
+  db.run('DELETE FROM pagos_inmueble WHERE id=?', [id])
+  guardarDb()
 }

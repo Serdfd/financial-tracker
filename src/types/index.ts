@@ -142,24 +142,29 @@ export interface InversionMensual {
 export interface Inmueble {
   id: number
   inversion_id: number
-  // General
   precio_compra_total: number
   valor_estimado_actual?: number
   estado: string
   fecha_entrega_estimada?: string
-  // Etapa 1: Separación
+  tipo_precio: 'fijo' | 'vis'
+  smlv_pactados: number
   monto_separacion: number
-  // Etapa 2: Cuota inicial
   cuota_inicial_total: number
   cuota_inicial_num_cuotas: number
-  cuota_inicial_valor_cuota: number
   cuota_inicial_cuotas_pagadas: number
-  // Etapa 3: Financiación
   financiacion_entidad_id?: number
   financiacion_monto: number
   financiacion_plazo_meses: number
-  financiacion_valor_cuota: number
   financiacion_cuotas_pagadas: number
+}
+
+export interface PagoInmueble {
+  id: number
+  inmueble_id: number
+  fecha: string
+  monto: number
+  etapa: 'separacion' | 'cuota_inicial' | 'financiacion'
+  nota?: string
 }
 
 // ── FICHAS TÉCNICAS ────────────────────────────────────
@@ -278,6 +283,17 @@ declare global {
       deletePresupuestoVariable: (id: number) => Promise<void>
       actualizarTRM: () => Promise<TRMResult>
       getDashboardData: (anio: number, mes: number) => Promise<DashboardData>
+      getParametros: () => Promise<ParametrosGlobales>
+      saveParametro: (clave: string, valor: string) => Promise<void>
+      getPagosInmueble: (inmueble_id: number) => Promise<PagoInmueble[]>
+      savePagoInmueble: (data: any) => Promise<void>
+      deletePagoInmueble: (id: number) => Promise<void>
     }
   }
+}
+
+export interface ParametrosGlobales {
+  smlv: string
+  retencion_cdt: string
+  [key: string]: string
 }

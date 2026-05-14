@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card'
 import { useAppStore } from '@/store/useAppStore'
 import { Categoria, Entidad, Moneda, PerfilRiesgo, TipoInversion } from '@/types'
 
-type TabConfig = 'entidades' | 'tipos' | 'riesgos' | 'categorias' | 'monedas'
+type TabConfig = 'entidades' | 'tipos' | 'riesgos' | 'categorias' | 'monedas' | 'parametros'
 
 // Emojis predefinidos para categorías financieras
 const EMOJIS_DISPONIBLES = [
@@ -26,6 +26,21 @@ export function Configuracion() {
   const [subTabCat, setSubTabCat] = useState<'ingreso' | 'gasto'>('ingreso')
   const [actualizandoTRM, setActualizandoTRM] = useState(false)
   const [trmMensaje, setTrmMensaje] = useState('')
+
+  const [parametros, setParametros] = useState<Record<string, string>>({ smlv: '1300000', retencion_cdt: '4' })
+  const [guardandoParams, setGuardandoParams] = useState(false)
+
+  useEffect(() => {
+    window.electronAPI.getParametros().then(setParametros)
+  }, [])
+
+  async function guardarParametro(clave: string, valor: string) {
+    setGuardandoParams(true)
+    await window.electronAPI.saveParametro(clave, valor)
+    const p = await window.electronAPI.getParametros()
+    setParametros(p)
+    setGuardandoParams(false)
+  }
 
   // Edición inline
   const [editando, setEditando] = useState<any>(null)
@@ -76,11 +91,12 @@ export function Configuracion() {
   }
 
   const tabs: { key: TabConfig; label: string }[] = [
+    { key: 'parametros', label: 'Parámetros Globales' },
     { key: 'entidades', label: 'Entidades' },
     { key: 'tipos', label: 'Tipos de Inversión' },
     { key: 'riesgos', label: 'Perfiles de Riesgo' },
     { key: 'categorias', label: 'Categorías' },
-    { key: 'monedas', label: 'Monedas' },
+    { key: 'monedas', label: 'Monedas' },    
   ]
 
   return (
@@ -287,6 +303,69 @@ export function Configuracion() {
             setNuevo={setNuevo}
           />
         </>
+      )}
+
+      {/* ── PARÁMETROS GLOBALES ── */}
+      {tab === 'parametros' && (
+        <Card>
+          <h2 className="text-white font-semibold text-lg mb-4">Parámetros globales</h2>
+          <div className="space-y-4">
+
+            {/* SMLV */}
+            <div className="bg-slate-900 rounded-lg p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-white font-medium text-sm">Salario Mínimo Legal Vigente (SMLV)</p>
+                  <p className="text-slate-400 text-xs mt-0.5">Se usa para calcular el valor estimado de inmuebles VIS/VIP. Actualízalo cada año.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 text-sm">$</span>
+                  <input
+                    type="number"
+                    value={parametros.smlv || ''}
+                    onChange={e => setParametros(p => ({ ...p, smlv: e.target.value }))}
+                    className="w-36 text-right"
+                    placeholder="1300000"
+                  />
+                  <button
+                    onClick={() => guardarParametro('smlv', parametros.smlv)}
+                    disabled={guardandoParams}
+                    className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50">
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Retención CDT */}
+            <div className="bg-slate-900 rounded-lg p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-white font-medium text-sm">Retención en la fuente — CDT (%)</p>
+                  <p className="text-slate-400 text-xs mt-0.5">Porcentaje de retención aplicado al rendimiento de CDTs. Default: 4%.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={parametros.retencion_cdt || ''}
+                    onChange={e => setParametros(p => ({ ...p, retencion_cdt: e.target.value }))}
+                    className="w-24 text-right"
+                    placeholder="4"
+                  />
+                  <span className="text-slate-400 text-sm">%</span>
+                  <button
+                    onClick={() => guardarParametro('retencion_cdt', parametros.retencion_cdt)}
+                    disabled={guardandoParams}
+                    className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50">
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </Card>
       )}
     </div>
   )

@@ -183,6 +183,15 @@ function crearTablas() {
       financiacion_cuotas_pagadas INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS pagos_inmueble (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      inmueble_id INTEGER NOT NULL REFERENCES inmuebles(id),
+      fecha TEXT NOT NULL,
+      monto REAL NOT NULL,
+      etapa TEXT NOT NULL CHECK(etapa IN ('separacion', 'cuota_inicial', 'financiacion')),
+      nota TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS fichas_inversion (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       inversion_id INTEGER NOT NULL UNIQUE REFERENCES inversiones(id),
@@ -212,6 +221,18 @@ function crearTablas() {
       comision REAL DEFAULT 0,
       nota TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS parametros_globales (
+      clave TEXT PRIMARY KEY,
+      valor TEXT NOT NULL,
+      descripcion TEXT
+    );
+
+
+
+    INSERT OR IGNORE INTO parametros_globales (clave, valor, descripcion) VALUES
+      ('smlv', '1300000', 'Salario Mínimo Legal Vigente en COP'),
+      ('retencion_cdt', '4', 'Retención en la fuente para CDTs (%)');
   `)
 }
 
@@ -296,6 +317,40 @@ function migraciones() {
       db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_cuotas_pagadas INTEGER DEFAULT 0")
     }
   }
+
+  // Migración: tabla parametros_globales
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS parametros_globales (
+      clave TEXT PRIMARY KEY,
+      valor TEXT NOT NULL,
+      descripcion TEXT
+    )`)
+    db.run(`INSERT OR IGNORE INTO parametros_globales (clave, valor, descripcion) VALUES
+      ('smlv', '1300000', 'Salario Mínimo Legal Vigente en COP'),
+      ('retencion_cdt', '4', 'Retención en la fuente para CDTs (%)')`)
+  } catch {}
+
+  // Migración: columnas VIS en inmuebles
+  const infoInm2 = db.exec("PRAGMA table_info(inmuebles)")
+  if (infoInm2.length) {
+    const cols = infoInm2[0].values.map((r: any[]) => r[1])
+    if (!cols.includes('tipo_precio')) {
+      db.run("ALTER TABLE inmuebles ADD COLUMN tipo_precio TEXT DEFAULT 'fijo'")
+      db.run("ALTER TABLE inmuebles ADD COLUMN smlv_pactados REAL DEFAULT 0")
+    }
+  }
+
+  // Migración: tabla pagos_inmueble
+  db.run(`
+    CREATE TABLE IF NOT EXISTS pagos_inmueble (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      inmueble_id INTEGER NOT NULL REFERENCES inmuebles(id),
+      fecha TEXT NOT NULL,
+      monto REAL NOT NULL,
+      etapa TEXT NOT NULL CHECK(etapa IN ('separacion', 'cuota_inicial', 'financiacion')),
+      nota TEXT
+    )
+  `)
 }
 
 function insertarSemilla() {

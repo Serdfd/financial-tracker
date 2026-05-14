@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { useAppStore } from '@/store/useAppStore'
-import { Inversion, InversionMensual, Inmueble, FichaInversion, LoteInversion, ResumenLotes } from '@/types'
+import { Inversion, InversionMensual, Inmueble, FichaInversion, LoteInversion, ResumenLotes, PagoInmueble } from '@/types'
 import { formatCOP, formatPct, MESES_NOMBRES, nombreMes } from '@/lib/format'
 
 export function Inversiones() {
@@ -14,6 +14,12 @@ export function Inversiones() {
   const [seleccionada, setSeleccionada] = useState<Inversion | null>(null)
   const [historial, setHistorial] = useState<InversionMensual[]>([])
   const [inmueble, setInmueble] = useState<Inmueble | null>(null)
+  const [pagosInmueble, setPagosInmueble] = useState<PagoInmueble[]>([])
+  const [modalPago, setModalPago] = useState(false)
+  const [formPago, setFormPago] = useState<any>({
+    fecha: new Date().toISOString().split('T')[0],
+    etapa: 'cuota_inicial'
+  })
   const [ficha, setFicha] = useState<FichaInversion | null>(null)
   const [lotes, setLotes] = useState<LoteInversion[]>([])
   const [resumenLotes, setResumenLotes] = useState<ResumenLotes | null>(null)
@@ -24,8 +30,14 @@ export function Inversiones() {
   const [tab, setTab] = useState<'lista' | 'inmuebles'>('lista')
   const [refreshKey, setRefreshKey] = useState(0)
 
+  const [parametros, setParametros] = useState<Record<string, string>>({ smlv: '1300000' })
+
+  useEffect(() => {
+    window.electronAPI.getParametros().then(setParametros)
+  }, [])
+
   const [form, setForm] = useState<any>({ estado: 'activo' })
-  const [formInmueble, setFormInmueble] = useState<Partial<Inmueble>>({ estado: 'en_construccion', cuotas_pagadas: 0 })
+  const [formInmueble, setFormInmueble] = useState<Partial<Inmueble>>({ estado: 'en_construccion', tipo_precio: 'fijo' })
   const [formFicha, setFormFicha] = useState<Partial<FichaInversion>>({})
   const [formLote, setFormLote] = useState<any>({ fecha_compra: new Date().toISOString().split('T')[0] })
 
@@ -56,7 +68,7 @@ export function Inversiones() {
     await verDetalle(inv)
     const inm = await window.electronAPI.getInmueble(inv.id)
     if (inm) setFormInmueble({ ...inm })
-    else setFormInmueble({ estado: 'en_construccion', cuotas_pagadas: 0 })
+    else setFormInmueble({ estado: 'en_construccion', tipo_precio: 'fijo' })
     setModalInmueble(true)
   }
 
@@ -95,6 +107,25 @@ export function Inversiones() {
     const inm = await window.electronAPI.getInmueble(seleccionada.id)
     setInmueble(inm)
     setModalInmueble(false)
+    setRefreshKey(prev => prev + 1)
+  }
+
+  async function abrirModalPago(inv: Inversion) {
+    await verDetalle(inv)
+    setFormPago({ fecha: new Date().toISOString().split('T')[0], etapa: 'cuota_inicial' })
+    setModalPago(true)
+  }
+
+  async function guardarPago() {
+    if (!inmueble) return
+    await window.electronAPI.savePagoInmueble({ ...formPago, inmueble_id: inmueble.id })
+    setModalPago(false)
+    setRefreshKey(prev => prev + 1)
+  }
+
+  async function eliminarPago(id: number) {
+    if (!confirm('¿Eliminar este pago?')) return
+    await window.electronAPI.deletePagoInmueble(id)
     setRefreshKey(prev => prev + 1)
   }
 
@@ -262,7 +293,7 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
               )}
               {inmuebles.map(inv => (
                 <InmuebleCard key={`${inv.id}-${refreshKey}`} inversion={inv}
-                  onClick={() => abrirModalInmueble(inv)} />
+                  onClick={() => abrirModalInmueble(inv)} parametros={parametros} />
               ))}
             </>
           )}
@@ -270,7 +301,7 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
 
         {/* Panel detalle */}
         {seleccionada && tab === 'lista' && (
-          <div className="w-[480px] space-y-4">
+          <div className="w-[480px] space-y-4 sticky top-6 self-start max-h-[calc(100vh-120px)] overflow-y-auto">
             <Card>
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -747,11 +778,6 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
                   <input type="number" step="0.01" value={formFicha.tasa_ea || ''} placeholder="Opcional"
                     onChange={e => setFormFicha(p => ({ ...p, tasa_ea: Number(e.target.value) }))} />
                 </div>
-                <div>
-                  <label className="text-slate-400 text-sm block mb-1">Monto inicial</label>
-                  <input type="number" value={formFicha.monto_inicial || ''} placeholder="0"
-                    onChange={e => setFormFicha(p => ({ ...p, monto_inicial: Number(e.target.value) }))} />
-                </div>
               </div>
             </>
           )}
@@ -775,18 +801,79 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
           <div>
             <p className="text-indigo-400 text-xs font-semibold uppercase mb-3">Datos generales</p>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-slate-400 text-sm block mb-1">Precio de compra total <span className="text-red-400">*</span></label>
-                <input type="number" value={formInmueble.precio_compra_total || ''}
-                  placeholder="0"
-                  onChange={e => setFormInmueble(p => ({ ...p, precio_compra_total: Number(e.target.value) }))} />
+
+              {/* Tipo de precio — siempre primero */}
+              <div className="col-span-2">
+                <label className="text-slate-400 text-sm block mb-1">Tipo de precio</label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="tipo_precio" value="fijo"
+                      checked={(formInmueble.tipo_precio || 'fijo') === 'fijo'}
+                      onChange={() => setFormInmueble(p => ({ ...p, tipo_precio: 'fijo', smlv_pactados: 0 }))} />
+                    <span className="text-slate-300 text-sm">Precio fijo (COP)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="tipo_precio" value="vis"
+                      checked={formInmueble.tipo_precio === 'vis'}
+                      onChange={() => setFormInmueble(p => ({ ...p, tipo_precio: 'vis', precio_compra_total: 0 }))} />
+                    <span className="text-slate-300 text-sm">VIS / VIP (SMLV)</span>
+                  </label>
+                </div>
               </div>
-              <div>
+
+              {/* Precio fijo — solo si no es VIS */}
+              {(formInmueble.tipo_precio || 'fijo') !== 'vis' && (
+                <div className="col-span-2">
+                  <label className="text-slate-400 text-sm block mb-1">Precio de compra total <span className="text-red-400">*</span></label>
+                  <input type="number" value={formInmueble.precio_compra_total || ''}
+                    placeholder="0"
+                    onChange={e => setFormInmueble(p => ({ ...p, precio_compra_total: Number(e.target.value) }))} />
+                </div>
+              )}
+
+              {/* VIS — solo si es VIS */}
+              {formInmueble.tipo_precio === 'vis' && (
+                <div className="col-span-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <label className="text-slate-400 text-sm block mb-1">SMLV pactados <span className="text-red-400">*</span></label>
+                      <input type="number" step="0.5"
+                        value={formInmueble.smlv_pactados || ''}
+                        placeholder="Ej: 150"
+                        onChange={e => {
+                          const smlv = Number(e.target.value)
+                          const smlvValor = Number(parametros.smlv || 1300000)
+                          setFormInmueble(p => ({
+                            ...p,
+                            smlv_pactados: smlv,
+                            precio_compra_total: smlv * smlvValor
+                          }))
+                        }} />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-slate-400 text-sm block mb-1">Precio estimado</label>
+                      <div className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono">
+                        {formInmueble.smlv_pactados
+                          ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
+                              .format(formInmueble.smlv_pactados * Number(parametros.smlv || 1300000))
+                          : '—'}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-amber-400 text-xs">
+                    ⚠️ Valor estimado con SMLV actual ({new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(parametros.smlv))}). El precio definitivo es al momento de escrituración.
+                  </p>
+                </div>
+              )}
+
+              {/* Valor estimado actual — siempre visible */}
+              <div className="col-span-2">
                 <label className="text-slate-400 text-sm block mb-1">Valor estimado actual</label>
                 <input type="number" value={formInmueble.valor_estimado_actual || ''}
                   placeholder="0 — actualizar cuando se conozca"
                   onChange={e => setFormInmueble(p => ({ ...p, valor_estimado_actual: Number(e.target.value) }))} />
               </div>
+
               <div>
                 <label className="text-slate-400 text-sm block mb-1">Fecha entrega estimada</label>
                 <input type="date" value={formInmueble.fecha_entrega_estimada || ''}
@@ -802,6 +889,7 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
                   <option value="vendido">Vendido</option>
                 </select>
               </div>
+
             </div>
           </div>
 
@@ -833,17 +921,6 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
                 <input type="number" value={formInmueble.cuota_inicial_num_cuotas || ''}
                   placeholder="0"
                   onChange={e => setFormInmueble(p => ({ ...p, cuota_inicial_num_cuotas: Number(e.target.value) }))} />
-              </div>
-              <div>
-                <label className="text-slate-400 text-sm block mb-1">Valor por cuota</label>
-                <input type="number" value={formInmueble.cuota_inicial_valor_cuota || ''}
-                  placeholder="0"
-                  onChange={e => setFormInmueble(p => ({ ...p, cuota_inicial_valor_cuota: Number(e.target.value) }))} />
-              </div>
-              <div>
-                <label className="text-slate-400 text-sm block mb-1">Cuotas pagadas</label>
-                <input type="number" value={formInmueble.cuota_inicial_cuotas_pagadas || 0}
-                  onChange={e => setFormInmueble(p => ({ ...p, cuota_inicial_cuotas_pagadas: Number(e.target.value) }))} />
               </div>
             </div>
             {/* Progreso cuota inicial */}
@@ -884,18 +961,7 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
                 <input type="number" value={formInmueble.financiacion_plazo_meses || ''}
                   placeholder="120, 180, 240..."
                   onChange={e => setFormInmueble(p => ({ ...p, financiacion_plazo_meses: Number(e.target.value) }))} />
-              </div>
-              <div>
-                <label className="text-slate-400 text-sm block mb-1">Valor cuota mensual</label>
-                <input type="number" value={formInmueble.financiacion_valor_cuota || ''}
-                  placeholder="0"
-                  onChange={e => setFormInmueble(p => ({ ...p, financiacion_valor_cuota: Number(e.target.value) }))} />
-              </div>
-              <div>
-                <label className="text-slate-400 text-sm block mb-1">Cuotas pagadas</label>
-                <input type="number" value={formInmueble.financiacion_cuotas_pagadas || 0}
-                  onChange={e => setFormInmueble(p => ({ ...p, financiacion_cuotas_pagadas: Number(e.target.value) }))} />
-              </div>
+              </div> 
             </div>
             {/* Progreso financiación */}
             {(formInmueble.financiacion_plazo_meses || 0) > 0 && (
@@ -923,33 +989,101 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
           </div>
         </div>
       </Modal>
+
+      {/* Modal registrar pago inmueble */}
+      <Modal open={modalPago} onClose={() => setModalPago(false)}
+        titulo={`Registrar pago — ${seleccionada?.nombre}`}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-slate-400 text-sm block mb-1">Fecha <span className="text-red-400">*</span></label>
+              <input type="date" value={formPago.fecha || ''}
+                onChange={e => setFormPago((p: any) => ({ ...p, fecha: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-slate-400 text-sm block mb-1">Monto <span className="text-red-400">*</span></label>
+              <input type="number" value={formPago.monto || ''} placeholder="0"
+                onChange={e => setFormPago((p: any) => ({ ...p, monto: Number(e.target.value) }))} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-slate-400 text-sm block mb-1">Etapa <span className="text-red-400">*</span></label>
+              <select value={formPago.etapa || 'cuota_inicial'}
+                onChange={e => setFormPago((p: any) => ({ ...p, etapa: e.target.value }))}>
+                <option value="separacion">Etapa 1 — Separación</option>
+                <option value="cuota_inicial">Etapa 2 — Cuota inicial</option>
+                <option value="financiacion">Etapa 3 — Financiación</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="text-slate-400 text-sm block mb-1">Nota</label>
+              <input value={formPago.nota || ''} placeholder="Ej: Cuota 5 de 24"
+                onChange={e => setFormPago((p: any) => ({ ...p, nota: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setModalPago(false)}
+              className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
+            <button onClick={guardarPago}
+              disabled={!formPago.fecha || !formPago.monto}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              Registrar pago
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
 
 // ── InmuebleCard ────────────────────────────────────────
-function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: () => void }) {
+function InmuebleCard({ inversion, onClick, parametros }: { inversion: Inversion; onClick: () => void; parametros: Record<string, string> }) {
   const [inmueble, setInmueble] = useState<Inmueble | null>(null)
+  const [pagos, setPagos] = useState<PagoInmueble[]>([])
+  const [modalPagoLocal, setModalPagoLocal] = useState(false)
+  const [formPagoLocal, setFormPagoLocal] = useState<any>({
+    fecha: new Date().toISOString().split('T')[0],
+    etapa: 'cuota_inicial'
+  })
 
   useEffect(() => {
-    window.electronAPI.getInmueble(inversion.id).then(setInmueble)
+    cargarDatos()
   }, [inversion.id])
 
-  const plusvalia = inmueble
-    ? (inmueble.valor_estimado_actual || 0) - inmueble.precio_compra_total : 0
+  async function cargarDatos() {
+    const inm = await window.electronAPI.getInmueble(inversion.id)
+    setInmueble(inm)
+    if (inm) {
+      const p = await window.electronAPI.getPagosInmueble(inm.id)
+      setPagos(p)
+    }
+  }
 
-  const progresoCuotaInicial = inmueble && inmueble.cuota_inicial_num_cuotas
-    ? Math.round((inmueble.cuota_inicial_cuotas_pagadas / inmueble.cuota_inicial_num_cuotas) * 100) : 0
+  async function guardarPagoLocal() {
+    if (!inmueble) return
+    await window.electronAPI.savePagoInmueble({ ...formPagoLocal, inmueble_id: inmueble.id })
+    setModalPagoLocal(false)
+    setFormPagoLocal({ fecha: new Date().toISOString().split('T')[0], etapa: 'cuota_inicial' })
+    await cargarDatos()
+  }
 
-  const progresoFinanciacion = inmueble && inmueble.financiacion_plazo_meses
-    ? Math.round((inmueble.financiacion_cuotas_pagadas / inmueble.financiacion_plazo_meses) * 100) : 0
+  async function eliminarPagoLocal(id: number) {
+    if (!confirm('¿Eliminar este pago?')) return
+    await window.electronAPI.deletePagoInmueble(id)
+    await cargarDatos()
+  }
 
-  const pagadoSeparacion = inmueble?.monto_separacion || 0
-  const pagadoCuotaInicial = inmueble
-    ? (inmueble.cuota_inicial_valor_cuota || 0) * inmueble.cuota_inicial_cuotas_pagadas : 0
-  const pagadoFinanciacion = inmueble
-    ? (inmueble.financiacion_valor_cuota || 0) * inmueble.financiacion_cuotas_pagadas : 0
-  const totalPagado = pagadoSeparacion + pagadoCuotaInicial + pagadoFinanciacion
+  // Calcular totales por etapa desde pagos reales
+  const pagosSeparacion = pagos.filter(p => p.etapa === 'separacion').reduce((s, p) => s + p.monto, 0)
+  const pagosCuotaInicial = pagos.filter(p => p.etapa === 'cuota_inicial').reduce((s, p) => s + p.monto, 0)
+  const pagosFinanciacion = pagos.filter(p => p.etapa === 'financiacion').reduce((s, p) => s + p.monto, 0)
+  const totalPagado = pagosSeparacion + pagosCuotaInicial + pagosFinanciacion
+
+  const progresoCuotaInicial = inmueble && inmueble.cuota_inicial_total
+    ? Math.min(100, Math.round((pagosCuotaInicial / inmueble.cuota_inicial_total) * 100)) : 0
+  const progresoFinanciacion = inmueble && inmueble.financiacion_monto
+    ? Math.min(100, Math.round((pagosFinanciacion / inmueble.financiacion_monto) * 100)) : 0
+
+  const plusvalia = inmueble ? (inmueble.valor_estimado_actual || 0) - inmueble.precio_compra_total : 0
 
   const estadoColors: Record<string, string> = {
     en_construccion: '#eab308', recibido: '#22c55e', en_arriendo: '#06b6d4', vendido: '#8b5cf6',
@@ -957,6 +1091,12 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
   const estadoLabels: Record<string, string> = {
     en_construccion: 'En construcción', recibido: 'Recibido',
     en_arriendo: 'En arriendo', vendido: 'Vendido',
+  }
+  const etapaLabels: Record<string, string> = {
+    separacion: 'Separación', cuota_inicial: 'Cuota inicial', financiacion: 'Financiación'
+  }
+  const etapaColors: Record<string, string> = {
+    separacion: 'text-amber-400', cuota_inicial: 'text-cyan-400', financiacion: 'text-green-400'
   }
 
   return (
@@ -974,12 +1114,19 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
           </div>
           <p className="text-slate-500 text-xs">{inversion.entidad_nombre || 'Sin entidad'}</p>
         </div>
-        {inmueble?.fecha_entrega_estimada && (
-          <div className="text-right">
-            <p className="text-slate-400 text-xs">Entrega estimada</p>
-            <p className="text-slate-300 text-sm">{inmueble.fecha_entrega_estimada}</p>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {inmueble?.fecha_entrega_estimada && (
+            <div className="text-right">
+              <p className="text-slate-400 text-xs">Entrega estimada</p>
+              <p className="text-slate-300 text-sm">{inmueble.fecha_entrega_estimada}</p>
+            </div>
+          )}
+          <button
+            onClick={e => { e.stopPropagation(); setModalPagoLocal(true) }}
+            className="flex items-center gap-1 px-2 py-1 bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-400 rounded-lg text-xs transition-colors">
+            <Plus size={12} /> Pago
+          </button>
+        </div>
       </div>
 
       {inmueble ? (
@@ -1004,30 +1151,42 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
             </div>
           </div>
 
-          {/* Etapas */}
+          {/* Badge VIS */}
+          {inmueble.tipo_precio === 'vis' && inmueble.smlv_pactados > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 text-xs">
+              <span className="text-amber-400 font-semibold">VIS — {inmueble.smlv_pactados} SMLV</span>
+              <span className="text-slate-400 ml-2">
+                (estimado: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
+                  .format(inmueble.smlv_pactados * Number(parametros.smlv || 1300000))})
+              </span>
+              <p className="text-slate-500 mt-0.5">⚠️ Valor definitivo al momento de escrituración</p>
+            </div>
+          )}
+
+          {/* Etapas con progreso desde pagos reales */}
           <div className="space-y-3">
             {/* Etapa 1 */}
             {inmueble.monto_separacion > 0 && (
               <div className="bg-slate-900 p-3 rounded-lg">
                 <div className="flex justify-between items-center">
                   <p className="text-amber-400 text-xs font-semibold">Etapa 1 — Separación</p>
-                  <p className="text-white font-mono text-xs">{formatCOP(inmueble.monto_separacion)}</p>
+                  <div className="text-right">
+                    <p className="text-white font-mono text-xs">{formatCOP(pagosSeparacion)}</p>
+                    <p className="text-slate-500 text-xs">de {formatCOP(inmueble.monto_separacion)}</p>
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Etapa 2 */}
-            {inmueble.cuota_inicial_num_cuotas > 0 && (
+            {inmueble.cuota_inicial_total > 0 && (
               <div className="bg-slate-900 p-3 rounded-lg space-y-2">
                 <div className="flex justify-between items-center">
                   <p className="text-cyan-400 text-xs font-semibold">Etapa 2 — Cuota inicial</p>
-                  <p className="text-white text-xs font-mono">
-                    {inmueble.cuota_inicial_cuotas_pagadas} / {inmueble.cuota_inicial_num_cuotas} cuotas
-                  </p>
-                </div>
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>Pagado: <span className="text-white font-mono">{formatCOP(pagadoCuotaInicial)}</span></span>
-                  <span>Cuota: <span className="text-white font-mono">{formatCOP(inmueble.cuota_inicial_valor_cuota)}</span></span>
+                  <div className="text-right">
+                    <p className="text-white font-mono text-xs">{formatCOP(pagosCuotaInicial)}</p>
+                    <p className="text-slate-500 text-xs">de {formatCOP(inmueble.cuota_inicial_total)} ({progresoCuotaInicial}%)</p>
+                  </div>
                 </div>
                 <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
                   <div className="h-full bg-cyan-500 rounded-full transition-all"
@@ -1037,17 +1196,14 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
             )}
 
             {/* Etapa 3 */}
-            {inmueble.financiacion_plazo_meses > 0 && (
+            {inmueble.financiacion_monto > 0 && (
               <div className="bg-slate-900 p-3 rounded-lg space-y-2">
                 <div className="flex justify-between items-center">
                   <p className="text-green-400 text-xs font-semibold">Etapa 3 — Financiación</p>
-                  <p className="text-white text-xs font-mono">
-                    {inmueble.financiacion_cuotas_pagadas} / {inmueble.financiacion_plazo_meses} cuotas
-                  </p>
-                </div>
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>Pagado: <span className="text-white font-mono">{formatCOP(pagadoFinanciacion)}</span></span>
-                  <span>Cuota: <span className="text-white font-mono">{formatCOP(inmueble.financiacion_valor_cuota)}</span></span>
+                  <div className="text-right">
+                    <p className="text-white font-mono text-xs">{formatCOP(pagosFinanciacion)}</p>
+                    <p className="text-slate-500 text-xs">de {formatCOP(inmueble.financiacion_monto)} ({progresoFinanciacion}%)</p>
+                  </div>
                 </div>
                 <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
                   <div className="h-full bg-green-500 rounded-full transition-all"
@@ -1062,10 +1218,76 @@ function InmuebleCard({ inversion, onClick }: { inversion: Inversion; onClick: (
             <p className="text-slate-400 text-xs">Total desembolsado</p>
             <p className="text-white font-mono font-bold text-sm">{formatCOP(totalPagado)}</p>
           </div>
+
+          {/* Historial de pagos */}
+          {pagos.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-slate-400 text-xs font-semibold mb-2">Historial de pagos</p>
+              {pagos.map(p => (
+                <div key={p.id} className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg">
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-slate-400">{p.fecha}</span>
+                    <span className={etapaColors[p.etapa]}>{etapaLabels[p.etapa]}</span>
+                    {p.nota && <span className="text-slate-500">{p.nota}</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-mono text-xs">{formatCOP(p.monto)}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); eliminarPagoLocal(p.id) }}
+                      className="p-1 text-slate-500 hover:text-red-400 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       ) : (
         <p className="text-slate-500 text-sm">Click para agregar datos del inmueble</p>
       )}
+
+      {/* Modal pago local */}
+      <Modal open={modalPagoLocal} onClose={() => setModalPagoLocal(false)}
+        titulo={`Registrar pago — ${inversion.nombre}`}>
+        <div className="space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-slate-400 text-sm block mb-1">Fecha <span className="text-red-400">*</span></label>
+              <input type="date" value={formPagoLocal.fecha || ''}
+                onChange={e => setFormPagoLocal((p: any) => ({ ...p, fecha: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-slate-400 text-sm block mb-1">Monto <span className="text-red-400">*</span></label>
+              <input type="number" value={formPagoLocal.monto || ''} placeholder="0"
+                onChange={e => setFormPagoLocal((p: any) => ({ ...p, monto: Number(e.target.value) }))} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-slate-400 text-sm block mb-1">Etapa <span className="text-red-400">*</span></label>
+              <select value={formPagoLocal.etapa || 'cuota_inicial'}
+                onChange={e => setFormPagoLocal((p: any) => ({ ...p, etapa: e.target.value }))}>
+                <option value="separacion">Etapa 1 — Separación</option>
+                <option value="cuota_inicial">Etapa 2 — Cuota inicial</option>
+                <option value="financiacion">Etapa 3 — Financiación</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="text-slate-400 text-sm block mb-1">Nota</label>
+              <input value={formPagoLocal.nota || ''} placeholder="Ej: Cuota 5 de 24"
+                onChange={e => setFormPagoLocal((p: any) => ({ ...p, nota: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setModalPagoLocal(false)}
+              className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
+            <button onClick={guardarPagoLocal}
+              disabled={!formPagoLocal.fecha || !formPagoLocal.monto}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              Registrar pago
+            </button>
+          </div>
+        </div>
+      </Modal>
     </Card>
   )
 }

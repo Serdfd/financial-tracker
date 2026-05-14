@@ -1,3 +1,4 @@
+
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import { initDatabase } from './database/db'
@@ -7,6 +8,8 @@ import { getInversiones, saveInversion, deleteInversion, getInversionMensual, ge
 import { getPresupuestoFijos, savePresupuestoFijo, deletePresupuestoFijo, getPresupuestoVariables, savePresupuestoVariable, deletePresupuestoVariable } from './database/queries/presupuesto'
 import { actualizarTRM } from './services/trm'
 import { getDb } from './database/db'
+import { getParametros, saveParametro } from './database/queries/parametros'
+import { getPagosInmueble, savePagoInmueble, deletePagoInmueble } from './database/queries/inversiones'
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -93,6 +96,10 @@ function registerIpcHandlers() {
   ipcMain.handle('getInmueble', (_, inversion_id) => getInmueble(inversion_id))
   ipcMain.handle('saveInmueble', (_, data) => saveInmueble(data))
 
+  ipcMain.handle('getPagosInmueble', (_e, inmueble_id: number) => getPagosInmueble(inmueble_id))
+  ipcMain.handle('savePagoInmueble', (_e, data: any) => savePagoInmueble(data))
+  ipcMain.handle('deletePagoInmueble', (_e, id: number) => deletePagoInmueble(id))
+
   // Fichas técnicas
   ipcMain.handle('getFichaInversion', (_, inversion_id) => getFichaInversion(inversion_id))
   ipcMain.handle('saveFichaInversion', (_, data) => saveFichaInversion(data))
@@ -110,6 +117,9 @@ function registerIpcHandlers() {
 
   // TRM
   ipcMain.handle('actualizarTRM', () => actualizarTRM())
+
+  ipcMain.handle('getParametros', () => getParametros())
+  ipcMain.handle('saveParametro', (_e, clave: string, valor: string) => saveParametro(clave, valor))
 
   // Lotes de compra
   ipcMain.handle('getLotesInversion', (_, inversion_id) => getLotesInversion(inversion_id))

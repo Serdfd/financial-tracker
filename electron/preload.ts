@@ -39,6 +39,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getInmueble: (inversion_id: number) => ipcRenderer.invoke('getInmueble', inversion_id),
   saveInmueble: (data: any) => ipcRenderer.invoke('saveInmueble', data),
 
+  // Pagos inmueble
+  getPagosInmueble: (inmueble_id: number) => ipcRenderer.invoke('getPagosInmueble', inmueble_id),
+  savePagoInmueble: (data: any) => ipcRenderer.invoke('savePagoInmueble', data),
+  deletePagoInmueble: (id: number) => ipcRenderer.invoke('deletePagoInmueble', id),
+
+  // Parámetros globales
+  getParametros: () => ipcRenderer.invoke('getParametros'),
+  saveParametro: (clave: string, valor: string) => ipcRenderer.invoke('saveParametro', clave, valor),
+
   // Fichas técnicas
   getFichaInversion: (inversion_id: number) => ipcRenderer.invoke('getFichaInversion', inversion_id),
   saveFichaInversion: (data: any) => ipcRenderer.invoke('saveFichaInversion', data),
