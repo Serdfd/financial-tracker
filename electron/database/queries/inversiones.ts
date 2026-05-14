@@ -170,46 +170,40 @@ export function saveInmueble(data: any): void {
   if (data.id) {
     db.run(
       `UPDATE inmuebles SET
-        precio_compra=?, precio_compra_total=?, valor_estimado_actual=?, estado=?, fecha_entrega_estimada=?,
+        precio_compra_total=?, valor_estimado_actual=?, estado=?, fecha_entrega_estimada=?,
         tipo_precio=?, smlv_pactados=?,
         monto_separacion=?,
-        cuota_inicial_total=?, cuota_inicial_num_cuotas=?, cuota_inicial_valor_cuota=?, cuota_inicial_cuotas_pagadas=?,
-        financiacion_entidad_id=?, financiacion_monto=?, financiacion_plazo_meses=?,
-        financiacion_valor_cuota=?, financiacion_cuotas_pagadas=?
+        cuota_inicial_total=?, cuota_inicial_num_cuotas=?,
+        financiacion_entidad_id=?, financiacion_monto=?, financiacion_plazo_meses=?
        WHERE id=?`,
       [
-        data.precio_compra_total, data.precio_compra_total,
-        v(data.valor_estimado_actual), data.estado || 'en_construccion', v(data.fecha_entrega_estimada),
+        data.precio_compra_total, v(data.valor_estimado_actual),
+        data.estado || 'en_construccion', v(data.fecha_entrega_estimada),
         data.tipo_precio || 'fijo', data.smlv_pactados || 0,
         data.monto_separacion || 0,
         data.cuota_inicial_total || 0, data.cuota_inicial_num_cuotas || 0,
-        data.cuota_inicial_valor_cuota || 0, data.cuota_inicial_cuotas_pagadas || 0,
         v(data.financiacion_entidad_id), data.financiacion_monto || 0,
-        data.financiacion_plazo_meses || 0, data.financiacion_valor_cuota || 0,
-        data.financiacion_cuotas_pagadas || 0,
+        data.financiacion_plazo_meses || 0,
         data.id
       ]
     )
   } else {
     db.run(
       `INSERT INTO inmuebles (
-        inversion_id, precio_compra, precio_compra_total, valor_estimado_actual, estado, fecha_entrega_estimada,
+        inversion_id, precio_compra_total, valor_estimado_actual, estado, fecha_entrega_estimada,
         tipo_precio, smlv_pactados,
         monto_separacion,
-        cuota_inicial_total, cuota_inicial_num_cuotas, cuota_inicial_valor_cuota, cuota_inicial_cuotas_pagadas,
-        financiacion_entidad_id, financiacion_monto, financiacion_plazo_meses,
-        financiacion_valor_cuota, financiacion_cuotas_pagadas)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        cuota_inicial_total, cuota_inicial_num_cuotas,
+        financiacion_entidad_id, financiacion_monto, financiacion_plazo_meses)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        data.inversion_id, data.precio_compra_total, data.precio_compra_total,
-        v(data.valor_estimado_actual), data.estado || 'en_construccion', v(data.fecha_entrega_estimada),
+        data.inversion_id, data.precio_compra_total, v(data.valor_estimado_actual),
+        data.estado || 'en_construccion', v(data.fecha_entrega_estimada),
         data.tipo_precio || 'fijo', data.smlv_pactados || 0,
         data.monto_separacion || 0,
         data.cuota_inicial_total || 0, data.cuota_inicial_num_cuotas || 0,
-        data.cuota_inicial_valor_cuota || 0, data.cuota_inicial_cuotas_pagadas || 0,
         v(data.financiacion_entidad_id), data.financiacion_monto || 0,
-        data.financiacion_plazo_meses || 0, data.financiacion_valor_cuota || 0,
-        data.financiacion_cuotas_pagadas || 0
+        data.financiacion_plazo_meses || 0
       ]
     )
   }

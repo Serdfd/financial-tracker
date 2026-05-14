@@ -922,20 +922,7 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
                   placeholder="0"
                   onChange={e => setFormInmueble(p => ({ ...p, cuota_inicial_num_cuotas: Number(e.target.value) }))} />
               </div>
-            </div>
-            {/* Progreso cuota inicial */}
-            {(formInmueble.cuota_inicial_num_cuotas || 0) > 0 && (
-              <div className="mt-2">
-                <div className="flex justify-between text-xs text-slate-400 mb-1">
-                  <span>Progreso cuota inicial</span>
-                  <span>{Math.round(((formInmueble.cuota_inicial_cuotas_pagadas || 0) / (formInmueble.cuota_inicial_num_cuotas || 1)) * 100)}%</span>
-                </div>
-                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-cyan-500 rounded-full transition-all"
-                    style={{ width: `${Math.min(100, Math.round(((formInmueble.cuota_inicial_cuotas_pagadas || 0) / (formInmueble.cuota_inicial_num_cuotas || 1)) * 100))}%` }} />
-                </div>
-              </div>
-            )}
+            </div>            
           </div>
 
           {/* Etapa 3 */}
@@ -962,20 +949,7 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
                   placeholder="120, 180, 240..."
                   onChange={e => setFormInmueble(p => ({ ...p, financiacion_plazo_meses: Number(e.target.value) }))} />
               </div> 
-            </div>
-            {/* Progreso financiación */}
-            {(formInmueble.financiacion_plazo_meses || 0) > 0 && (
-              <div className="mt-2">
-                <div className="flex justify-between text-xs text-slate-400 mb-1">
-                  <span>Progreso financiación</span>
-                  <span>{Math.round(((formInmueble.financiacion_cuotas_pagadas || 0) / (formInmueble.financiacion_plazo_meses || 1)) * 100)}%</span>
-                </div>
-                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500 rounded-full transition-all"
-                    style={{ width: `${Math.min(100, Math.round(((formInmueble.financiacion_cuotas_pagadas || 0) / (formInmueble.financiacion_plazo_meses || 1)) * 100))}%` }} />
-                </div>
-              </div>
-            )}
+            </div>            
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
