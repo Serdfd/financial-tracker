@@ -162,25 +162,19 @@ function crearTablas() {
 
     CREATE TABLE IF NOT EXISTS inmuebles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      inversion_id INTEGER NOT NULL REFERENCES inversiones(id),
-      -- General
-      precio_compra_total REAL NOT NULL,
+      inversion_id INTEGER NOT NULL UNIQUE REFERENCES inversiones(id),
+      precio_compra_total REAL NOT NULL DEFAULT 0,
       valor_estimado_actual REAL,
       estado TEXT DEFAULT 'en_construccion',
       fecha_entrega_estimada TEXT,
-      -- Etapa 1: Separación
+      tipo_precio TEXT DEFAULT 'fijo',
+      smlv_pactados REAL DEFAULT 0,
       monto_separacion REAL DEFAULT 0,
-      -- Etapa 2: Cuota inicial
       cuota_inicial_total REAL DEFAULT 0,
       cuota_inicial_num_cuotas INTEGER DEFAULT 0,
-      cuota_inicial_valor_cuota REAL DEFAULT 0,
-      cuota_inicial_cuotas_pagadas INTEGER DEFAULT 0,
-      -- Etapa 3: Financiación
       financiacion_entidad_id INTEGER REFERENCES entidades(id),
       financiacion_monto REAL DEFAULT 0,
-      financiacion_plazo_meses INTEGER DEFAULT 0,
-      financiacion_valor_cuota REAL DEFAULT 0,
-      financiacion_cuotas_pagadas INTEGER DEFAULT 0
+      financiacion_plazo_meses INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS pagos_inmueble (
@@ -195,21 +189,12 @@ function crearTablas() {
     CREATE TABLE IF NOT EXISTS fichas_inversion (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       inversion_id INTEGER NOT NULL UNIQUE REFERENCES inversiones(id),
-      -- CDT
       tasa_ea REAL,
-      fecha_vencimiento TEXT,
       plazo_dias INTEGER,
-      monto_inicial REAL,
       retencion_pct REAL DEFAULT 4,
-      -- Acciones
-      num_acciones REAL,
-      precio_promedio REAL,
       mercado TEXT,
       ticker TEXT,
-      -- Crypto
-      cantidad_tokens REAL,
-      token_symbol TEXT,
-      precio_promedio_crypto REAL
+      token_symbol TEXT
     );
 
     CREATE TABLE IF NOT EXISTS lotes_inversion (
@@ -227,100 +212,89 @@ function crearTablas() {
       valor TEXT NOT NULL,
       descripcion TEXT
     );
-
-
-
-    INSERT OR IGNORE INTO parametros_globales (clave, valor, descripcion) VALUES
-      ('smlv', '1300000', 'Salario Mínimo Legal Vigente en COP'),
-      ('retencion_cdt', '4', 'Retención en la fuente para CDTs (%)');
   `)
 }
 
 // Migraciones para bases de datos existentes
 function migraciones() {
-  // Migración: agregar columna emoji a categorias si no existe
+  // Emoji en categorias
   const infoCat = db.exec("PRAGMA table_info(categorias)")
   if (infoCat.length) {
-    const columnas = infoCat[0].values.map((row: any[]) => row[1])
-    if (!columnas.includes('emoji')) {
+    const cols = infoCat[0].values.map((r: any[]) => r[1])
+    if (!cols.includes('emoji')) {
       db.run("ALTER TABLE categorias ADD COLUMN emoji TEXT DEFAULT ''")
     }
   }
 
-  // Migración: crear tabla fichas_inversion si no existe (ya está en crearTablas,
-  // pero para DBs que ya existían antes de esta versión)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS fichas_inversion (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      inversion_id INTEGER NOT NULL UNIQUE REFERENCES inversiones(id),
-      tasa_ea REAL,
-      fecha_vencimiento TEXT,
-      plazo_dias INTEGER,
-      monto_inicial REAL,
-      num_acciones REAL,
-      precio_promedio REAL,
-      mercado TEXT,
-      ticker TEXT,
-      cantidad_tokens REAL,
-      token_symbol TEXT,
-      precio_promedio_crypto REAL
-    )
-  `)
+  // fichas_inversion — nueva estructura limpia
+  db.run(`CREATE TABLE IF NOT EXISTS fichas_inversion (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inversion_id INTEGER NOT NULL UNIQUE REFERENCES inversiones(id),
+    tasa_ea REAL,
+    plazo_dias INTEGER,
+    retencion_pct REAL DEFAULT 4,
+    mercado TEXT,
+    ticker TEXT,
+    token_symbol TEXT
+  )`)
 
-  // Migración: crear tabla lotes_inversion
-  db.run(`
-    CREATE TABLE IF NOT EXISTS lotes_inversion (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      inversion_id INTEGER NOT NULL REFERENCES inversiones(id),
-      fecha_compra TEXT NOT NULL,
-      cantidad REAL NOT NULL,
-      precio_unitario REAL NOT NULL,
-      comision REAL DEFAULT 0,
-      nota TEXT
-    )
-  `)
-
-  // Migración: agregar retencion_pct a fichas_inversion
+  // Agregar retencion_pct si no existe
   const infoFicha = db.exec("PRAGMA table_info(fichas_inversion)")
   if (infoFicha.length) {
-    const columnasFicha = infoFicha[0].values.map((row: any[]) => row[1])
-    if (!columnasFicha.includes('retencion_pct')) {
+    const cols = infoFicha[0].values.map((r: any[]) => r[1])
+    if (!cols.includes('retencion_pct')) {
       db.run("ALTER TABLE fichas_inversion ADD COLUMN retencion_pct REAL DEFAULT 4")
     }
   }
 
-  // Migración: reestructurar tabla inmuebles con las 3 etapas
-  const infoInmueble = db.exec("PRAGMA table_info(inmuebles)")
-  if (infoInmueble.length) {
-    const columnasInmueble = infoInmueble[0].values.map((row: any[]) => row[1])
+  // lotes_inversion
+  db.run(`CREATE TABLE IF NOT EXISTS lotes_inversion (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inversion_id INTEGER NOT NULL REFERENCES inversiones(id),
+    fecha_compra TEXT NOT NULL,
+    cantidad REAL NOT NULL,
+    precio_unitario REAL NOT NULL,
+    comision REAL DEFAULT 0,
+    nota TEXT
+  )`)
 
-    // Primero agregar precio_compra_total si no existe
-    if (!columnasInmueble.includes('precio_compra_total')) {
+  // Columnas nuevas en inmuebles
+  const infoInm = db.exec("PRAGMA table_info(inmuebles)")
+  if (infoInm.length) {
+    const cols = infoInm[0].values.map((r: any[]) => r[1])
+    if (!cols.includes('precio_compra_total')) {
       db.run("ALTER TABLE inmuebles ADD COLUMN precio_compra_total REAL DEFAULT 0")
-      // Copiar datos del campo viejo si existe
-      if (columnasInmueble.includes('precio_compra')) {
+      if (cols.includes('precio_compra')) {
         db.run("UPDATE inmuebles SET precio_compra_total = precio_compra")
       }
     }
-
-    // Luego agregar el resto de columnas nuevas
-    if (!columnasInmueble.includes('monto_separacion')) {
+    if (!cols.includes('monto_separacion')) {
       db.run("ALTER TABLE inmuebles ADD COLUMN monto_separacion REAL DEFAULT 0")
       db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_total REAL DEFAULT 0")
       db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_num_cuotas INTEGER DEFAULT 0")
-      db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_valor_cuota REAL DEFAULT 0")
-      db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_cuotas_pagadas INTEGER DEFAULT 0")
       db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_entidad_id INTEGER")
       db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_monto REAL DEFAULT 0")
       db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_plazo_meses INTEGER DEFAULT 0")
-      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_valor_cuota REAL DEFAULT 0")
-      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_cuotas_pagadas INTEGER DEFAULT 0")
+    }
+    if (!cols.includes('tipo_precio')) {
+      db.run("ALTER TABLE inmuebles ADD COLUMN tipo_precio TEXT DEFAULT 'fijo'")
+      db.run("ALTER TABLE inmuebles ADD COLUMN smlv_pactados REAL DEFAULT 0")
     }
   }
 
-  // Migración: tabla parametros_globales
+  // pagos_inmueble
+  db.run(`CREATE TABLE IF NOT EXISTS pagos_inmueble (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inmueble_id INTEGER NOT NULL REFERENCES inmuebles(id),
+    fecha TEXT NOT NULL,
+    monto REAL NOT NULL,
+    etapa TEXT NOT NULL CHECK(etapa IN ('separacion', 'cuota_inicial', 'financiacion')),
+    nota TEXT
+  )`)
+
+  // parametros_globales
   try {
-    db.exec(`CREATE TABLE IF NOT EXISTS parametros_globales (
+    db.run(`CREATE TABLE IF NOT EXISTS parametros_globales (
       clave TEXT PRIMARY KEY,
       valor TEXT NOT NULL,
       descripcion TEXT
@@ -329,28 +303,6 @@ function migraciones() {
       ('smlv', '1300000', 'Salario Mínimo Legal Vigente en COP'),
       ('retencion_cdt', '4', 'Retención en la fuente para CDTs (%)')`)
   } catch {}
-
-  // Migración: columnas VIS en inmuebles
-  const infoInm2 = db.exec("PRAGMA table_info(inmuebles)")
-  if (infoInm2.length) {
-    const cols = infoInm2[0].values.map((r: any[]) => r[1])
-    if (!cols.includes('tipo_precio')) {
-      db.run("ALTER TABLE inmuebles ADD COLUMN tipo_precio TEXT DEFAULT 'fijo'")
-      db.run("ALTER TABLE inmuebles ADD COLUMN smlv_pactados REAL DEFAULT 0")
-    }
-  }
-
-  // Migración: tabla pagos_inmueble
-  db.run(`
-    CREATE TABLE IF NOT EXISTS pagos_inmueble (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      inmueble_id INTEGER NOT NULL REFERENCES inmuebles(id),
-      fecha TEXT NOT NULL,
-      monto REAL NOT NULL,
-      etapa TEXT NOT NULL CHECK(etapa IN ('separacion', 'cuota_inicial', 'financiacion')),
-      nota TEXT
-    )
-  `)
 }
 
 function insertarSemilla() {

@@ -151,11 +151,9 @@ export interface Inmueble {
   monto_separacion: number
   cuota_inicial_total: number
   cuota_inicial_num_cuotas: number
-  cuota_inicial_cuotas_pagadas: number
   financiacion_entidad_id?: number
   financiacion_monto: number
   financiacion_plazo_meses: number
-  financiacion_cuotas_pagadas: number
 }
 
 export interface PagoInmueble {
@@ -167,6 +165,12 @@ export interface PagoInmueble {
   nota?: string
 }
 
+export interface ParametrosGlobales {
+  smlv: string
+  retencion_cdt: string
+  [key: string]: string
+}
+
 // ── FICHAS TÉCNICAS ────────────────────────────────────
 export interface FichaInversion {
   id: number
@@ -174,18 +178,12 @@ export interface FichaInversion {
   // CDT
   tasa_ea?: number
   plazo_dias?: number
-  retencion_pct?: number   // nuevo — default 4%
-  // monto_inicial eliminado — se toma del saldo inicial
-  // fecha_vencimiento eliminado — se calcula: fecha_inicio + plazo_dias
+  retencion_pct?: number
   // Acciones
-  num_acciones?: number
-  precio_promedio?: number
   mercado?: string
   ticker?: string
   // Crypto
-  cantidad_tokens?: number
   token_symbol?: string
-  precio_promedio_crypto?: number
 }
 
 export interface LoteInversion {
@@ -231,8 +229,8 @@ export interface DashboardData {
   gastos: number
   rendimientos: number
   patrimonioNeto: number
-  patrimonioInversiones: number   // nuevo — inversiones financieras
-  patrimonioInmuebles: number     // nuevo — valor estimado inmuebles
+  patrimonioInversiones: number
+  patrimonioInmuebles: number
   deudasTC: number
   ultimos6Meses: { anio: number; mes: number; ingresos: number; gastos: number }[]
   ultimos12Meses: { anio: number; mes: number; patrimonio: number }[]
@@ -268,6 +266,9 @@ declare global {
       saveInversionMensual: (data: any) => Promise<void>
       getInmueble: (inversion_id: number) => Promise<Inmueble>
       saveInmueble: (data: any) => Promise<void>
+      getPagosInmueble: (inmueble_id: number) => Promise<PagoInmueble[]>
+      savePagoInmueble: (data: any) => Promise<void>
+      deletePagoInmueble: (id: number) => Promise<void>
       getFichaInversion: (inversion_id: number) => Promise<FichaInversion | null>
       saveFichaInversion: (data: any) => Promise<void>
       getAlertasCDT: () => Promise<AlertaCDT[]>
@@ -285,15 +286,6 @@ declare global {
       getDashboardData: (anio: number, mes: number) => Promise<DashboardData>
       getParametros: () => Promise<ParametrosGlobales>
       saveParametro: (clave: string, valor: string) => Promise<void>
-      getPagosInmueble: (inmueble_id: number) => Promise<PagoInmueble[]>
-      savePagoInmueble: (data: any) => Promise<void>
-      deletePagoInmueble: (id: number) => Promise<void>
     }
   }
-}
-
-export interface ParametrosGlobales {
-  smlv: string
-  retencion_cdt: string
-  [key: string]: string
 }
