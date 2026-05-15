@@ -10,6 +10,7 @@ import { actualizarTRM } from './services/trm'
 import { getDb } from './database/db'
 import { getParametros, saveParametro } from './database/queries/parametros'
 import { getPagosInmueble, savePagoInmueble, deletePagoInmueble } from './database/queries/inversiones'
+import { getPresupuestoCategorias, savePresupuestoCategoria, deletePresupuestoCategoria } from './database/queries/presupuesto'
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -114,6 +115,9 @@ function registerIpcHandlers() {
   ipcMain.handle('getPresupuestoVariables', () => getPresupuestoVariables())
   ipcMain.handle('savePresupuestoVariable', (_, data) => savePresupuestoVariable(data))
   ipcMain.handle('deletePresupuestoVariable', (_, id) => deletePresupuestoVariable(id))
+  ipcMain.handle('getPresupuestoCategorias', () => getPresupuestoCategorias())
+  ipcMain.handle('savePresupuestoCategoria', (_e, data: any) => savePresupuestoCategoria(data))
+  ipcMain.handle('deletePresupuestoCategoria', (_e, id: number) => deletePresupuestoCategoria(id))
 
   // TRM
   ipcMain.handle('actualizarTRM', () => actualizarTRM())

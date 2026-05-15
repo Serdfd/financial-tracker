@@ -102,6 +102,13 @@ function crearTablas() {
       activo INTEGER DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS presupuesto_categorias (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      categoria_id INTEGER NOT NULL UNIQUE REFERENCES categorias(id),
+      tope_mensual REAL NOT NULL,
+      activo INTEGER DEFAULT 1
+    );
+
     CREATE TABLE IF NOT EXISTS meses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       anio INTEGER NOT NULL,
@@ -292,6 +299,14 @@ function migraciones() {
     nota TEXT
   )`)
 
+  // Migración: tabla presupuesto_categorias
+  db.run(`CREATE TABLE IF NOT EXISTS presupuesto_categorias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoria_id INTEGER NOT NULL UNIQUE REFERENCES categorias(id),
+    tope_mensual REAL NOT NULL,
+    activo INTEGER DEFAULT 1
+  )`)
+  
   // parametros_globales
   try {
     db.run(`CREATE TABLE IF NOT EXISTS parametros_globales (

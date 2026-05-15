@@ -68,6 +68,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPresupuestoVariables: () => ipcRenderer.invoke('getPresupuestoVariables'),
   savePresupuestoVariable: (data: any) => ipcRenderer.invoke('savePresupuestoVariable', data),
   deletePresupuestoVariable: (id: number) => ipcRenderer.invoke('deletePresupuestoVariable', id),
+  getPresupuestoCategorias: () => ipcRenderer.invoke('getPresupuestoCategorias'),
+  savePresupuestoCategoria: (data: any) => ipcRenderer.invoke('savePresupuestoCategoria', data),
+  deletePresupuestoCategoria: (id: number) => ipcRenderer.invoke('deletePresupuestoCategoria', id),
 
   // TRM
   actualizarTRM: () => ipcRenderer.invoke('actualizarTRM'),

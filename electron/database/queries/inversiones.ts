@@ -50,15 +50,21 @@ export function saveInversion(data: any): any {
     const lastId = rowsToObjects(db.exec('SELECT last_insert_rowid() as id'))
     inversionId = lastId[0]?.id
 
-    // Saldo inicial OPCIONAL: solo si viene y es > 0
+    // Saldo inicial OPCIONAL: se guarda en el mes ANTERIOR como punto de partida
     if (data.saldo_inicial && data.saldo_inicial > 0 && inversionId) {
-      const hoy = new Date()
-      const anio = hoy.getFullYear()
-      const mes = hoy.getMonth() + 1
+      const fechaInicio = data.fecha_inicio ? new Date(data.fecha_inicio) : new Date()
 
-      db.run('INSERT OR IGNORE INTO meses (anio, mes) VALUES (?, ?)', [anio, mes])
+      let anioAnterior = fechaInicio.getFullYear()
+      let mesAnterior = fechaInicio.getMonth() // 0-based = mes anterior al de inicio
+
+      if (mesAnterior === 0) {
+        mesAnterior = 12
+        anioAnterior -= 1
+      }
+
+      db.run('INSERT OR IGNORE INTO meses (anio, mes) VALUES (?, ?)', [anioAnterior, mesAnterior])
       const mesResult = rowsToObjects(db.exec(
-        'SELECT id FROM meses WHERE anio = ? AND mes = ?', [anio, mes]
+        'SELECT id FROM meses WHERE anio = ? AND mes = ?', [anioAnterior, mesAnterior]
       ))
       const mesId = mesResult[0]?.id
 
@@ -67,8 +73,8 @@ export function saveInversion(data: any): any {
           `INSERT INTO inversion_mensual (inversion_id, mes_id, saldo_cierre, aportes, retiros, rendimiento, rentabilidad_pct)
            VALUES (?,?,?,?,?,?,?)
            ON CONFLICT(inversion_id, mes_id) DO UPDATE SET
-             saldo_cierre=excluded.saldo_cierre, aportes=excluded.aportes`,
-          [inversionId, mesId, data.saldo_inicial, data.saldo_inicial, 0, 0, 0]
+             saldo_cierre=excluded.saldo_cierre`,
+          [inversionId, mesId, data.saldo_inicial, 0, 0, 0, 0]
         )
       }
     }
@@ -118,6 +124,8 @@ export function saveInversionMensual(data: any): void {
   const mesActual = rowsToObjects(db.exec(
     'SELECT anio, mes FROM meses WHERE id = ?', [data.mes_id]
   ))[0]
+
+  console.log('mesActual:', mesActual)
 
   let saldoAnterior = 0
   if (mesActual) {
@@ -232,24 +240,20 @@ export function saveFichaInversion(data: any): void {
     db.run(
       `UPDATE fichas_inversion SET
         tasa_ea=?, plazo_dias=?, retencion_pct=?,
-        num_acciones=?, precio_promedio=?, mercado=?, ticker=?,
-        cantidad_tokens=?, token_symbol=?, precio_promedio_crypto=?
+        mercado=?, ticker=?, token_symbol=?
        WHERE inversion_id=?`,
       [v(data.tasa_ea), v(data.plazo_dias), v(data.retencion_pct) ?? 4,
-       v(data.num_acciones), v(data.precio_promedio), v(data.mercado), v(data.ticker),
-       v(data.cantidad_tokens), v(data.token_symbol), v(data.precio_promedio_crypto),
+       v(data.mercado), v(data.ticker), v(data.token_symbol),
        data.inversion_id]
     )
   } else {
     db.run(
       `INSERT INTO fichas_inversion (
         inversion_id, tasa_ea, plazo_dias, retencion_pct,
-        num_acciones, precio_promedio, mercado, ticker,
-        cantidad_tokens, token_symbol, precio_promedio_crypto)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        mercado, ticker, token_symbol)
+       VALUES (?,?,?,?,?,?,?)`,
       [data.inversion_id, v(data.tasa_ea), v(data.plazo_dias), v(data.retencion_pct) ?? 4,
-       v(data.num_acciones), v(data.precio_promedio), v(data.mercado), v(data.ticker),
-       v(data.cantidad_tokens), v(data.token_symbol), v(data.precio_promedio_crypto)]
+       v(data.mercado), v(data.ticker), v(data.token_symbol)]
     )
   }
   guardarDb()

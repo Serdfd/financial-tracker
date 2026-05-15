@@ -71,3 +71,36 @@ export function deletePresupuestoVariable(id: number): void {
   db.run('UPDATE presupuesto_variables SET activo = 0 WHERE id = ?', [id])
   guardarDb()
 }
+
+export function getPresupuestoCategorias(): any[] {
+  const db = getDb()
+  return rowsToObjects(db.exec(
+    `SELECT pc.*, c.nombre as categoria_nombre, c.color as categoria_color, c.emoji as categoria_emoji
+     FROM presupuesto_categorias pc
+     JOIN categorias c ON pc.categoria_id = c.id
+     WHERE pc.activo = 1
+     ORDER BY c.nombre`
+  ))
+}
+
+export function savePresupuestoCategoria(data: any): void {
+  const db = getDb()
+  if (data.id) {
+    db.run(
+      'UPDATE presupuesto_categorias SET categoria_id=?, tope_mensual=? WHERE id=?',
+      [data.categoria_id, data.tope_mensual, data.id]
+    )
+  } else {
+    db.run(
+      'INSERT INTO presupuesto_categorias (categoria_id, tope_mensual) VALUES (?,?)',
+      [data.categoria_id, data.tope_mensual]
+    )
+  }
+  guardarDb()
+}
+
+export function deletePresupuestoCategoria(id: number): void {
+  const db = getDb()
+  db.run('UPDATE presupuesto_categorias SET activo = 0 WHERE id = ?', [id])
+  guardarDb()
+}

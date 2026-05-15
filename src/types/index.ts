@@ -50,6 +50,15 @@ export interface PresupuestoFijo {
   categoria_color?: string
 }
 
+export interface PresupuestoCategoria {
+  id: number
+  categoria_id: number
+  tope_mensual: number
+  categoria_nombre: string
+  categoria_color: string
+  categoria_emoji?: string
+}
+
 export interface PresupuestoVariable {
   id: number
   nombre: string
@@ -282,6 +291,9 @@ declare global {
       getPresupuestoVariables: () => Promise<PresupuestoVariable[]>
       savePresupuestoVariable: (data: any) => Promise<void>
       deletePresupuestoVariable: (id: number) => Promise<void>
+      getPresupuestoCategorias: () => Promise<PresupuestoCategoria[]>
+      savePresupuestoCategoria: (data: any) => Promise<void>
+      deletePresupuestoCategoria: (id: number) => Promise<void>
       actualizarTRM: () => Promise<TRMResult>
       getDashboardData: (anio: number, mes: number) => Promise<DashboardData>
       getParametros: () => Promise<ParametrosGlobales>
