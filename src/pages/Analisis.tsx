@@ -56,7 +56,7 @@ export function Analisis() {
     colors: ['#22c55e', '#ef4444', '#06b6d4'],
     stroke: { curve: 'smooth', width: 2 },
     dataLabels: { enabled: false },
-    xaxis: { categorias, labels: { style: { colors: '#94a3b8' } } },
+    xaxis: { categories: filas.map(f => `${MESES_NOMBRES[f.mes].slice(0, 3)} ${f.anio}`), labels: { style: { colors: '#94a3b8' } } },
     yaxis: {
       labels: {
         style: { colors: '#94a3b8' },
@@ -81,7 +81,7 @@ export function Analisis() {
     fill: { type: 'gradient', gradient: { opacityFrom: 0.3, opacityTo: 0.05 } },
     stroke: { curve: 'smooth', width: 2 },
     dataLabels: { enabled: false },
-    xaxis: { categorias, labels: { style: { colors: '#94a3b8' } } },
+    xaxis: { categories: filas.map(f => `${MESES_NOMBRES[f.mes].slice(0, 3)} ${f.anio}`), labels: { style: { colors: '#94a3b8' } } },
     yaxis: {
       labels: {
         style: { colors: '#94a3b8' },
