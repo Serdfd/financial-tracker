@@ -22,6 +22,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveGastoMes: (data: any) => ipcRenderer.invoke('saveGastoMes', data),
   deleteGastoMes: (id: number) => ipcRenderer.invoke('deleteGastoMes', id),
 
+  saveTransaccionDetalle: (data: any) => ipcRenderer.invoke('saveTransaccionDetalle', data),
+  getTransaccionesMes: (mes_id: number) => ipcRenderer.invoke('getTransaccionesMes', mes_id),
+  deleteTransaccionesMes: (mes_id: number) => ipcRenderer.invoke('deleteTransaccionesMes', mes_id),
+
   // Deudas TC
   getDeudasTC: (mes_id: number) => ipcRenderer.invoke('getDeudasTC', mes_id),
   saveDeudaTC: (data: any) => ipcRenderer.invoke('saveDeudaTC', data),

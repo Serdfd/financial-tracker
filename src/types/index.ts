@@ -109,6 +109,22 @@ export interface DeudaTC {
   saldo: number
 }
 
+export interface TransaccionDetalle {
+  id: number
+  mes_id: number
+  fecha?: string
+  hora?: string
+  cuenta?: string
+  categoria_id?: number
+  categoria_nombre_original: string
+  tipo: 'ingreso' | 'gasto'
+  monto: number
+  descripcion?: string
+  categoria_nombre?: string
+  categoria_color?: string
+  categoria_emoji?: string
+}
+
 // ── INVERSIONES ────────────────────────────────────────
 export interface Inversion {
   id: number
@@ -264,6 +280,9 @@ declare global {
       getGastosMes: (mes_id: number) => Promise<GastoMes[]>
       saveGastoMes: (data: any) => Promise<void>
       deleteGastoMes: (id: number) => Promise<void>
+      saveTransaccionDetalle: (data: any) => Promise<void>
+      getTransaccionesMes: (mes_id: number) => Promise<TransaccionDetalle[]>
+      deleteTransaccionesMes: (mes_id: number) => Promise<void>
       getDeudasTC: (mes_id: number) => Promise<DeudaTC[]>
       saveDeudaTC: (data: any) => Promise<void>
       deleteDeudaTC: (id: number) => Promise<void>

@@ -135,6 +135,19 @@ function crearTablas() {
       nota TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS transacciones_detalle (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mes_id INTEGER NOT NULL REFERENCES meses(id),
+      fecha TEXT,
+      hora TEXT,
+      cuenta TEXT,
+      categoria_id INTEGER REFERENCES categorias(id),
+      categoria_nombre_original TEXT,
+      tipo TEXT NOT NULL CHECK(tipo IN ('ingreso', 'gasto')),
+      monto REAL NOT NULL,
+      descripcion TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS deudas_tc (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       mes_id INTEGER NOT NULL REFERENCES meses(id),
@@ -297,6 +310,28 @@ function migraciones() {
     monto REAL NOT NULL,
     etapa TEXT NOT NULL CHECK(etapa IN ('separacion', 'cuota_inicial', 'financiacion')),
     nota TEXT
+  )`)
+
+  // Migración: tabla presupuesto_categorias
+  db.run(`CREATE TABLE IF NOT EXISTS presupuesto_categorias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoria_id INTEGER NOT NULL UNIQUE REFERENCES categorias(id),
+    tope_mensual REAL NOT NULL,
+    activo INTEGER DEFAULT 1
+  )`)
+  
+// Migración: tabla transacciones_detalle
+  db.run(`CREATE TABLE IF NOT EXISTS transacciones_detalle (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mes_id INTEGER NOT NULL REFERENCES meses(id),
+    fecha TEXT,
+    hora TEXT,
+    cuenta TEXT,
+    categoria_id INTEGER REFERENCES categorias(id),
+    categoria_nombre_original TEXT,
+    tipo TEXT NOT NULL CHECK(tipo IN ('ingreso', 'gasto')),
+    monto REAL NOT NULL,
+    descripcion TEXT
   )`)
 
   // Migración: tabla presupuesto_categorias

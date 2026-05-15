@@ -11,6 +11,7 @@ import { getDb } from './database/db'
 import { getParametros, saveParametro } from './database/queries/parametros'
 import { getPagosInmueble, savePagoInmueble, deletePagoInmueble } from './database/queries/inversiones'
 import { getPresupuestoCategorias, savePresupuestoCategoria, deletePresupuestoCategoria } from './database/queries/presupuesto'
+import { saveTransaccionDetalle, getTransaccionesMes, deleteTransaccionesMes } from './database/queries/transacciones'
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -79,6 +80,10 @@ function registerIpcHandlers() {
   ipcMain.handle('getGastosMes', (_, mes_id) => getGastosMes(mes_id))
   ipcMain.handle('saveGastoMes', (_, data) => saveGastoMes(data))
   ipcMain.handle('deleteGastoMes', (_, id) => deleteGastoMes(id))
+
+  ipcMain.handle('saveTransaccionDetalle', (_e, data: any) => saveTransaccionDetalle(data))
+  ipcMain.handle('getTransaccionesMes', (_e, mes_id: number) => getTransaccionesMes(mes_id))
+  ipcMain.handle('deleteTransaccionesMes', (_e, mes_id: number) => deleteTransaccionesMes(mes_id))
 
   // Deudas TC
   ipcMain.handle('getDeudasTC', (_, mes_id) => getDeudasTC(mes_id))

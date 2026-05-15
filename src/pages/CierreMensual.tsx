@@ -19,112 +19,183 @@ export function CierreMensual() {
   const [invMensual, setInvMensual] = useState<Record<number, InversionMensual>>({})
   const [guardando, setGuardando] = useState(false)
 
-  // ── IMPORTACIÓN CSV ──────────────────────────────────
+  // ── IMPORTACIÓN CSV DETALLE ──────────────────────────
   const inputCsvRef = useRef<HTMLInputElement>(null)
   const [modalCsv, setModalCsv] = useState(false)
-  const [csvRows, setCsvRows] = useState<{
-    nombre: string
-    monto: number
-    categoria_id: number | null  // null = no encontrada
-    omitir: boolean
-  }[]>([])
   const [importando, setImportando] = useState(false)
+  const [soloDetalle, setSoloDetalle] = useState(false)
+
+  type FilaCsv = {
+    fecha: string
+    hora: string
+    cuenta: string
+    categoria_nombre_original: string
+    tipo: 'ingreso' | 'gasto'
+    monto: number
+    descripcion: string
+    categoria_id: number | null
+    omitir: boolean
+  }
+
+  const [csvRows, setCsvRows] = useState<FilaCsv[]>([])
 
   function fixEncoding(str: string): string {
-    // Corrige Latin-1 interpretado como UTF-8 (ej: CategorÃ­a → Categoría)
-    try {
-      return decodeURIComponent(escape(str))
-    } catch {
-      return str
-    }
+    try { return decodeURIComponent(escape(str)) } catch { return str }
   }
 
   function parsearMonto(str: string): number {
-    // "79,800.00" → 79800
     return parseFloat(str.replace(/,/g, '')) || 0
   }
 
-function procesarCsv(contenido: string) {
-  const categoriasGasto = categorias.filter(c => c.tipo === 'gasto')
-  const lineas = contenido.split('\n').map(l => l.trim()).filter(l => l)
+  function procesarCsvDetalle(contenido: string) {
+    const todasCategorias = [...categorias]
+    const lineas = contenido.split('\n').map(l => l.trim()).filter(l => l)
 
-  // Encontrar la línea del header ("", "Categoría", "Cantidad")
-  const headerIdx = lineas.findIndex(l =>
-    l.toLowerCase().includes('categor') && l.toLowerCase().includes('cantidad')
-  )
-  if (headerIdx === -1) {
-    alert('No se encontró el encabezado esperado (Categoría, Cantidad) en el CSV.')
-    return
-  }
-
-  // Parsear líneas de datos después del header
-  const datos = lineas.slice(headerIdx + 1)
-
-  const filas = datos.map(linea => {
-    // Extraer campos entre comillas: "idx", "Nombre", "Monto"
-    const matches = [...linea.matchAll(/"([^"]*)"/g)].map(m => m[1])
-    if (matches.length < 3) return null
-
-    const nombre = matches[1].trim()
-    const monto = parsearMonto(matches[2])
-
-    if (!nombre || monto <= 0) return null
-
-    const cat = categoriasGasto.find(
-      c => c.nombre.toLowerCase().trim() === nombre.toLowerCase().trim()
+    const headerIdx = lineas.findIndex(l =>
+      l.toLowerCase().includes('fecha') && l.toLowerCase().includes('gasto')
     )
+    if (headerIdx === -1) {
+      alert('No se encontró el encabezado esperado en el CSV.')
+      return
+    }
 
-    return { nombre, monto, categoria_id: cat?.id || null, omitir: false }
-  }).filter(Boolean) as typeof csvRows
+    const filas: FilaCsv[] = []
+    for (const linea of lineas.slice(headerIdx + 1)) {
+      const matches = [...linea.matchAll(/"([^"]*)"/g)].map(m => m[1])
+      if (matches.length < 7) continue
 
-  if (filas.length === 0) {
-    alert('No se encontraron filas válidas en el CSV.')
-    return
+      const fecha = matches[1].trim()
+      const hora = matches[2].trim()
+      const cuenta = fixEncoding(matches[3].trim())
+      const categoriaNombre = fixEncoding(matches[4].trim())
+      const ingresoStr = matches[5].trim()
+      const gastoStr = matches[6].trim()
+      const descripcion = fixEncoding(matches[7]?.trim() || '')
+
+      const esIngreso = ingresoStr !== '' && parsearMonto(ingresoStr) > 0
+      const monto = parsearMonto(esIngreso ? ingresoStr : gastoStr)
+      if (monto <= 0) continue
+
+      const tipo: 'ingreso' | 'gasto' = esIngreso ? 'ingreso' : 'gasto'
+      const tipoFiltro = tipo === 'ingreso' ? 'ingreso' : 'gasto'
+      const cat = todasCategorias.find(
+        c => c.tipo === tipoFiltro &&
+          c.nombre.toLowerCase().trim() === categoriaNombre.toLowerCase().trim()
+      )
+
+      filas.push({
+        fecha, hora, cuenta, categoria_nombre_original: categoriaNombre,
+        tipo, monto, descripcion,
+        categoria_id: cat?.id || null,
+        omitir: false
+      })
+    }
+
+    if (filas.length === 0) {
+      alert('No se encontraron transacciones válidas en el CSV.')
+      return
+    }
+
+    setCsvRows(filas)
+    setModalCsv(true)
   }
-
-  setCsvRows(filas)
-  setModalCsv(true)
-}
 
   function onArchivoSeleccionado(e: React.ChangeEvent<HTMLInputElement>) {
     const archivo = e.target.files?.[0]
     if (!archivo) return
-
     const reader = new FileReader()
-    reader.onload = ev => {
-      const contenido = ev.target?.result as string
-      procesarCsv(contenido)
-    }
+    reader.onload = ev => procesarCsvDetalle(ev.target?.result as string)
     reader.readAsText(archivo, 'UTF-8')
-    // Reset input para poder subir el mismo archivo otra vez
     e.target.value = ''
   }
 
   async function confirmarImportacion() {
     if (!mes) return
+
+    // Verificar si ya hay transacciones importadas para este mes
+    const existentes = await window.electronAPI.getTransaccionesMes(mes.id)
+    if (existentes.length > 0) {
+      const confirmar = confirm(`Ya hay ${existentes.length} transacciones registradas para este mes. ¿Deseas agregar más de todas formas?`)
+      if (!confirmar) return
+    }
+
     setImportando(true)
     const copId = monedas.find(m => m.codigo === 'COP')?.id || 1
-
     const filasValidas = csvRows.filter(r => !r.omitir && r.categoria_id && r.monto > 0)
+
+    if (!soloDetalle) {
+      // Agrupar por tipo + categoria_id para el cierre mensual
+      const totalesIngreso: Record<number, number> = {}
+      const totalesGasto: Record<number, number> = {}
+
+      for (const fila of filasValidas) {
+        if (fila.tipo === 'ingreso') {
+          totalesIngreso[fila.categoria_id!] = (totalesIngreso[fila.categoria_id!] || 0) + fila.monto
+        } else {
+          totalesGasto[fila.categoria_id!] = (totalesGasto[fila.categoria_id!] || 0) + fila.monto
+        }
+      }
+
+      for (const [catId, monto] of Object.entries(totalesIngreso)) {
+        await window.electronAPI.saveIngresoMes({
+          id: 0, mes_id: mes.id,
+          categoria_id: Number(catId),
+          monto, moneda_id: copId,
+          nota: 'Importado desde CSV'
+        })
+      }
+
+      for (const [catId, monto] of Object.entries(totalesGasto)) {
+        await window.electronAPI.saveGastoMes({
+          id: 0, mes_id: mes.id,
+          categoria_id: Number(catId),
+          monto, moneda_id: copId,
+          nota: 'Importado desde CSV'
+        })
+      }
+    }
+
+    // Siempre guardar detalle
     for (const fila of filasValidas) {
-      await window.electronAPI.saveGastoMes({
-        id: 0,
+      await window.electronAPI.saveTransaccionDetalle({
         mes_id: mes.id,
-        categoria_id: fila.categoria_id!,
-        monto: fila.monto,
-        moneda_id: copId,
-        nota: `Importado: ${fila.nombre}`
+        fecha: fila.fecha, hora: fila.hora, cuenta: fila.cuenta,
+        categoria_id: fila.categoria_id,
+        categoria_nombre_original: fila.categoria_nombre_original,
+        tipo: fila.tipo, monto: fila.monto, descripcion: fila.descripcion
       })
     }
 
     await cargarDatos()
     setModalCsv(false)
     setCsvRows([])
+    setSoloDetalle(false)
     setImportando(false)
   }
 
-  const filasNoEncontradas = csvRows.filter(r => !r.categoria_id && !r.omitir).length
-  const filasListas = csvRows.filter(r => !r.omitir && r.categoria_id && r.monto > 0).length
+  // Agrupar filas por tipo y categoria para el preview
+  const resumenIngreso = csvRows
+    .filter(r => r.tipo === 'ingreso' && !r.omitir)
+    .reduce((acc, r) => {
+      const key = r.categoria_nombre_original
+      if (!acc[key]) acc[key] = { nombre: key, categoria_id: r.categoria_id, total: 0, count: 0 }
+      acc[key].total += r.monto
+      acc[key].count += 1
+      return acc
+    }, {} as Record<string, { nombre: string; categoria_id: number | null; total: number; count: number }>)
+
+  const resumenGasto = csvRows
+    .filter(r => r.tipo === 'gasto' && !r.omitir)
+    .reduce((acc, r) => {
+      const key = r.categoria_nombre_original
+      if (!acc[key]) acc[key] = { nombre: key, categoria_id: r.categoria_id, total: 0, count: 0 }
+      acc[key].total += r.monto
+      acc[key].count += 1
+      return acc
+    }, {} as Record<string, { nombre: string; categoria_id: number | null; total: number; count: number }>)
+
+  const hayNoEncontrados = csvRows.some(r => !r.omitir && !r.categoria_id)
+  const filasValidas = csvRows.filter(r => !r.omitir && r.categoria_id).length
 
   useEffect(() => { cargarDatos() }, [mesActivo, anioActivo])
 
@@ -308,11 +379,18 @@ function procesarCsv(contenido: string) {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-white font-semibold">Ingresos del mes</h3>
-            {!cerrado && (
-              <button onClick={agregarIngreso} className="btn-primary flex items-center gap-1 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
-                <Plus size={14} /> Agregar
+            <div className="flex items-center gap-2">
+              <input ref={inputCsvRef} type="file" accept=".csv" className="hidden" onChange={onArchivoSeleccionado} />
+              <button onClick={() => inputCsvRef.current?.click()}
+                className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">
+                <Upload size={14} /> Importar CSV
               </button>
-            )}
+              {!cerrado && (
+                <button onClick={agregarIngreso} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
+                  <Plus size={14} /> Agregar
+                </button>
+              )}
+            </div>
           </div>
           <div className="space-y-2">
             {ingresos.length === 0 && <p className="text-slate-500 text-sm text-center py-6">No hay ingresos registrados</p>}
@@ -358,26 +436,17 @@ function procesarCsv(contenido: string) {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-white font-semibold">Gastos del mes</h3>
-            {!cerrado && (
               <div className="flex items-center gap-2">
-                <input
-                  ref={inputCsvRef}
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={onArchivoSeleccionado}
-                />
-                <button
-                  onClick={() => inputCsvRef.current?.click()}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors"
-                >
+                <button onClick={() => inputCsvRef.current?.click()}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">
                   <Upload size={14} /> Importar CSV
-                </button>
-                <button onClick={agregarGasto} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
-                  <Plus size={14} /> Agregar
-                </button>
-              </div>
-            )}
+                </button>                
+                {!cerrado && (
+                  <button onClick={agregarGasto} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
+                    <Plus size={14} /> Agregar
+                  </button>
+                )}
+              </div>            
           </div>
           <div className="space-y-2">
             {gastos.length === 0 && <p className="text-slate-500 text-sm text-center py-6">No hay gastos registrados</p>}
@@ -536,106 +605,127 @@ function procesarCsv(contenido: string) {
          )}
       </Card>
       )}
-
-      {/* ── MODAL IMPORTAR CSV ── */}
+      {/* ── MODAL IMPORTAR CSV DETALLE ── */}
       <Modal open={modalCsv} onClose={() => { setModalCsv(false); setCsvRows([]) }}
-        titulo="Importar gastos desde CSV" ancho="max-w-2xl">
+        titulo="Importar movimientos desde CSV" ancho="max-w-3xl">
         <div className="space-y-4">
 
           {/* Resumen */}
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-4 text-sm flex-wrap">
             <span className="flex items-center gap-1.5 text-green-400">
-              <CheckCircle size={14} />
-              {filasListas} listas para importar
+              <CheckCircle size={14} /> {filasValidas} transacciones listas
             </span>
-            {filasNoEncontradas > 0 && (
+            {hayNoEncontrados && (
               <span className="flex items-center gap-1.5 text-amber-400">
-                <AlertCircle size={14} />
-                {filasNoEncontradas} categorías no encontradas
+                <AlertCircle size={14} /> Hay categorías sin mapear
               </span>
             )}
+            <span className="text-slate-500 text-xs">
+              {csvRows.filter(r => r.tipo === 'ingreso').length} ingresos · {csvRows.filter(r => r.tipo === 'gasto').length} gastos
+            </span>
           </div>
 
-          {/* Tabla de preview */}
-          <div className="max-h-96 overflow-y-auto space-y-1">
-            {csvRows.map((fila, idx) => {
-              const categoriasGasto = categorias.filter(c => c.tipo === 'gasto')
-              const encontrada = !!fila.categoria_id
-              return (
-                <div key={idx} className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg text-sm ${
-                  fila.omitir ? 'opacity-40' : encontrada ? 'bg-slate-900' : 'bg-amber-500/10 border border-amber-500/30'
-                }`}>
-                  <div className="col-span-1 flex justify-center">
-                    {fila.omitir
-                      ? <X size={14} className="text-slate-500" />
-                      : encontrada
-                        ? <CheckCircle size={14} className="text-green-400" />
-                        : <AlertCircle size={14} className="text-amber-400" />
-                    }
-                  </div>
-                  <div className="col-span-3 text-slate-400 truncate" title={fila.nombre}>
-                    {fila.nombre}
-                  </div>
-                  <div className="col-span-2 text-white font-mono text-right">
-                    {formatCOP(fila.monto)}
-                  </div>
-                  <div className="col-span-4">
-                    {encontrada
-                      ? <span className="text-green-400 text-xs">
-                          {categoriasGasto.find(c => c.id === fila.categoria_id)?.emoji || ''} {categoriasGasto.find(c => c.id === fila.categoria_id)?.nombre}
-                        </span>
-                      : (
-                        <select
-                          value={fila.categoria_id || ''}
-                          className="w-full text-xs"
-                          onChange={e => setCsvRows(prev => prev.map((r, i) =>
-                            i === idx ? { ...r, categoria_id: Number(e.target.value) || null } : r
-                          ))}>
-                          <option value="">Seleccionar...</option>
-                          {categoriasGasto.map(c => (
-                            <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>
-                          ))}
-                        </select>
-                      )
-                    }
-                  </div>
-                  <div className="col-span-2 flex justify-end">
-                    <button
-                      onClick={() => setCsvRows(prev => prev.map((r, i) =>
-                        i === idx ? { ...r, omitir: !r.omitir } : r
-                      ))}
-                      className={`text-xs px-2 py-0.5 rounded transition-colors ${
-                        fila.omitir
-                          ? 'bg-slate-700 text-slate-400 hover:bg-slate-600'
-                          : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                      }`}
-                    >
-                      {fila.omitir ? 'Incluir' : 'Omitir'}
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
+          {/* Ingresos agrupados */}
+          {Object.keys(resumenIngreso).length > 0 && (
+            <div>
+              <p className="text-green-400 text-xs font-semibold uppercase mb-2">Ingresos</p>
+              <div className="space-y-1">
+                {Object.values(resumenIngreso).map((grupo, idx) => {
+                  const cats = categorias.filter(c => c.tipo === 'ingreso')
+                  const encontrada = !!grupo.categoria_id
+                  return (
+                    <div key={idx} className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg text-sm ${encontrada ? 'bg-slate-900' : 'bg-amber-500/10 border border-amber-500/30'}`}>
+                      <div className="col-span-1 flex justify-center">
+                        {encontrada ? <CheckCircle size={14} className="text-green-400" /> : <AlertCircle size={14} className="text-amber-400" />}
+                      </div>
+                      <div className="col-span-3 text-slate-400 truncate text-xs" title={grupo.nombre}>{grupo.nombre}</div>
+                      <div className="col-span-2 text-slate-500 text-xs">{grupo.count} mov.</div>
+                      <div className="col-span-2 text-green-400 font-mono text-right">{formatCOP(grupo.total)}</div>
+                      <div className="col-span-4">
+                        {encontrada
+                          ? <span className="text-green-400 text-xs">{cats.find(c => c.id === grupo.categoria_id)?.emoji} {cats.find(c => c.id === grupo.categoria_id)?.nombre}</span>
+                          : <select className="w-full text-xs"
+                              value={grupo.categoria_id || ''}
+                              onChange={e => setCsvRows(prev => prev.map(r =>
+                                r.tipo === 'ingreso' && r.categoria_nombre_original === grupo.nombre
+                                  ? { ...r, categoria_id: Number(e.target.value) || null }
+                                  : r
+                              ))}>
+                              <option value="">Seleccionar...</option>
+                              {cats.map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
+                            </select>
+                        }
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Gastos agrupados */}
+          {Object.keys(resumenGasto).length > 0 && (
+            <div>
+              <p className="text-red-400 text-xs font-semibold uppercase mb-2">Gastos</p>
+              <div className="space-y-1">
+                {Object.values(resumenGasto).map((grupo, idx) => {
+                  const cats = categorias.filter(c => c.tipo === 'gasto')
+                  const encontrada = !!grupo.categoria_id
+                  return (
+                    <div key={idx} className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg text-sm ${encontrada ? 'bg-slate-900' : 'bg-amber-500/10 border border-amber-500/30'}`}>
+                      <div className="col-span-1 flex justify-center">
+                        {encontrada ? <CheckCircle size={14} className="text-green-400" /> : <AlertCircle size={14} className="text-amber-400" />}
+                      </div>
+                      <div className="col-span-3 text-slate-400 truncate text-xs" title={grupo.nombre}>{grupo.nombre}</div>
+                      <div className="col-span-2 text-slate-500 text-xs">{grupo.count} mov.</div>
+                      <div className="col-span-2 text-red-400 font-mono text-right">{formatCOP(grupo.total)}</div>
+                      <div className="col-span-4">
+                        {encontrada
+                          ? <span className="text-green-400 text-xs">{cats.find(c => c.id === grupo.categoria_id)?.emoji} {cats.find(c => c.id === grupo.categoria_id)?.nombre}</span>
+                          : <select className="w-full text-xs"
+                              value={grupo.categoria_id || ''}
+                              onChange={e => setCsvRows(prev => prev.map(r =>
+                                r.tipo === 'gasto' && r.categoria_nombre_original === grupo.nombre
+                                  ? { ...r, categoria_id: Number(e.target.value) || null }
+                                  : r
+                              ))}>
+                              <option value="">Seleccionar...</option>
+                              {cats.map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
+                            </select>
+                        }
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Modo importación */}
+          <div className="flex items-center gap-3 pt-2 border-t border-slate-700">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={soloDetalle}
+                onChange={e => setSoloDetalle(e.target.checked)}
+                className="w-4 h-4 rounded" />
+              <span className="text-slate-300 text-sm">Solo guardar detalle</span>
+            </label>
+            <p className="text-slate-500 text-xs">Actívalo si el mes ya está cerrado — no modifica ingresos ni gastos registrados</p>
           </div>
 
           {/* Acciones */}
           <div className="flex justify-between items-center pt-2 border-t border-slate-700">
-            <button
-              onClick={() => { setModalCsv(false); setCsvRows([]) }}
-              className="px-4 py-2 text-slate-400 hover:text-white text-sm">
-              Cancelar
-            </button>
-            <button
-              onClick={confirmarImportacion}
-              disabled={importando || filasListas === 0 || filasNoEncontradas > 0}
-              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-              {importando ? 'Importando...' : `Importar ${filasListas} gastos`}
+            <button onClick={() => { setModalCsv(false); setCsvRows([]) }}
+              className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
+            <button onClick={confirmarImportacion}
+              disabled={importando || filasValidas === 0 || (hayNoEncontrados && !soloDetalle)}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              {importando ? 'Importando...' : soloDetalle ? `Guardar detalle (${filasValidas} transacciones)` : `Importar ${filasValidas} transacciones`}
             </button>
           </div>
 
-          {filasNoEncontradas > 0 && (
+          {hayNoEncontrados && (
             <p className="text-amber-400 text-xs text-center">
-              Asigna una categoría a todas las filas marcadas en amarillo para poder importar.
+              Asigna una categoría a todos los grupos marcados en amarillo para poder importar.
             </p>
           )}
         </div>
