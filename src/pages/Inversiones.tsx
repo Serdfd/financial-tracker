@@ -1019,6 +1019,8 @@ function InmuebleCard({ inversion, onClick, parametros }: { inversion: Inversion
     etapa: 'cuota_inicial'
   })
 
+  const [mostrarHistorial, setMostrarHistorial] = useState(false)
+
   useEffect(() => {
     cargarDatos()
   }, [inversion.id])
@@ -1196,8 +1198,13 @@ function InmuebleCard({ inversion, onClick, parametros }: { inversion: Inversion
           {/* Historial de pagos */}
           {pagos.length > 0 && (
             <div className="space-y-1">
-              <p className="text-slate-400 text-xs font-semibold mb-2">Historial de pagos</p>
-              {pagos.map(p => (
+              <button
+                onClick={e => { e.stopPropagation(); setMostrarHistorial(p => !p) }}
+                className="flex items-center justify-between w-full text-slate-400 text-xs font-semibold hover:text-white transition-colors">
+                <span>Historial de pagos ({pagos.length})</span>
+                <span>{mostrarHistorial ? '▲' : '▼'}</span>
+              </button>
+              {mostrarHistorial && pagos.map(p => (
                 <div key={p.id} className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg">
                   <div className="flex items-center gap-3 text-xs">
                     <span className="text-slate-400">{p.fecha}</span>
