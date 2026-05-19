@@ -23,9 +23,14 @@ export default defineConfig({
         entry: 'electron/preload.ts',
         vite: {
           build: {
-            outDir: 'dist-electron',
             rollupOptions: {
-              external: ['better-sqlite3', 'sql.js', 'electron']
+              output: {
+                manualChunks: {
+                  'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+                  'charts': ['apexcharts', 'react-apexcharts'],
+                  'icons': ['lucide-react'],
+                }
+              }
             }
           }
         },

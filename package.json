@@ -37,6 +37,7 @@
   "build": {
     "appId": "com.personal.financial-tracker",
     "productName": "Financial Tracker",
+    "icon": "build/icon.ico",
     "directories": {
       "output": "release"
     },
@@ -44,12 +45,17 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
-    "win": {
-      "target": "nsis"
+    "portable": {
+      "artifactName": "Financial Tracker.exe"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
     }
   }
 }
