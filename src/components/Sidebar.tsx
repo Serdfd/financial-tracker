@@ -1,20 +1,17 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  CalendarCheck,
-  TrendingUp,
-  Wallet,
-  BarChart3,
-  Settings
+  LayoutDashboard, CalendarCheck, TrendingUp,
+  Wallet, BarChart3, Settings, List
 } from 'lucide-react'
 
 const links = [
-  { to: '/',            icon: LayoutDashboard, label: 'Dashboard'       },
-  { to: '/cierre',      icon: CalendarCheck,   label: 'Cierre Mensual'  },
-  { to: '/inversiones', icon: TrendingUp,      label: 'Inversiones'     },
-  { to: '/presupuesto', icon: Wallet,          label: 'Presupuesto'     },
-  { to: '/analisis',    icon: BarChart3,       label: 'Análisis'        },
-  { to: '/configuracion', icon: Settings,      label: 'Configuración'   },
+  { to: '/',               icon: LayoutDashboard, label: 'Dashboard'        },
+  { to: '/cierre',         icon: CalendarCheck,   label: 'Cierre Mensual'   },
+  { to: '/inversiones',    icon: TrendingUp,      label: 'Inversiones'      },
+  { to: '/presupuesto',    icon: Wallet,          label: 'Presupuesto'      },
+  { to: '/transacciones',  icon: List,            label: 'Transacciones'    },
+  { to: '/analisis',       icon: BarChart3,       label: 'Análisis'         },
+  { to: '/configuracion',  icon: Settings,        label: 'Configuración'    },
 ]
 
 export function Sidebar() {

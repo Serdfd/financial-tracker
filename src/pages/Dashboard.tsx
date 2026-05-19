@@ -5,12 +5,14 @@ import { Card, MetricCard } from '@/components/ui/Card'
 import { useAppStore } from '@/store/useAppStore'
 import { DashboardData, AlertaCDT } from '@/types'
 import { formatCOP, formatPct, MESES_NOMBRES, nombreMes } from '@/lib/format'
+import { Modal } from '@/components/ui/Modal'
 
 export function Dashboard() {
   const { mesActivo, anioActivo, setMesActivo } = useAppStore()
   const [data, setData] = useState<DashboardData | null>(null)
   const [alertas, setAlertas] = useState<AlertaCDT[]>([])
   const [cargando, setCargando] = useState(true)
+  const [modalAlertas, setModalAlertas] = useState(false)
 
   useEffect(() => {
     cargarDatos()
@@ -24,6 +26,7 @@ export function Dashboard() {
     ])
     setData(d)
     setAlertas(a)
+    if (a.length > 0) setModalAlertas(true)
     setCargando(false)
   }
 
@@ -131,7 +134,7 @@ export function Dashboard() {
                     <p className="text-slate-400 text-xs">
                       {a.entidad_nombre || ''} · Vence: {a.fecha_vencimiento}
                       {a.tasa_ea ? ` · Tasa: ${a.tasa_ea}% EA` : ''}
-                      {a.monto_inicial ? ` · ${formatCOP(a.monto_inicial)}` : ''}
+                      {a.plazo_dias ? ` · ${a.plazo_dias} días` : ''}
                     </p>
                   </div>
                 </div>
@@ -235,6 +238,45 @@ export function Dashboard() {
           </div>
         </>
       )}
+      {/* Modal alertas CDT al abrir */}
+      <Modal open={modalAlertas} onClose={() => setModalAlertas(false)}
+        titulo="⚠️ Alertas de vencimiento — CDTs" ancho="max-w-lg">
+        <div className="space-y-3">
+          <p className="text-slate-400 text-sm">Los siguientes CDTs están próximos a vencer o ya vencieron:</p>
+          {alertas.map((a, i) => (
+            <div key={i} className={`flex items-start gap-3 px-4 py-3 rounded-lg border ${
+              a.dias_restantes <= 0
+                ? 'bg-red-500/10 border-red-500/30'
+                : a.dias_restantes <= 7
+                ? 'bg-amber-500/10 border-amber-500/30'
+                : 'bg-indigo-500/10 border-indigo-500/30'
+            }`}>
+              <AlertTriangle size={18} className={`mt-0.5 flex-shrink-0 ${
+                a.dias_restantes <= 0 ? 'text-red-400' :
+                a.dias_restantes <= 7 ? 'text-amber-400' : 'text-indigo-400'
+              }`} />
+              <div>
+                <p className="text-white text-sm font-medium">
+                  {a.dias_restantes <= 0
+                    ? `Venció hace ${Math.abs(Math.round(a.dias_restantes))} día(s)`
+                    : `Vence en ${Math.round(a.dias_restantes)} día(s)`}
+                </p>
+                <p className="text-white text-sm">{a.nombre}</p>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  {a.entidad_nombre || ''} · {a.fecha_vencimiento}
+                  {a.tasa_ea ? ` · ${a.tasa_ea}% EA` : ''}
+                </p>
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end pt-2">
+            <button onClick={() => setModalAlertas(false)}
+              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm">
+              Entendido
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
