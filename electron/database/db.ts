@@ -269,6 +269,56 @@ function migraciones() {
       db.run("ALTER TABLE inmuebles ADD COLUMN monto_separacion REAL DEFAULT 0")
       db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_total REAL DEFAULT 0")
       db.run("ALTER TABLE inmuebles ADD COLUMN cuota_inicial_num_cuotas INTEGER DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_entidad_id INTEGER")
+      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_monto REAL DEFAULT 0")
+      db.run("ALTER TABLE inmuebles ADD COLUMN financiacion_plazo_meses INTEGER DEFAULT 0")
+    }
+    if (!cols.includes('tipo_precio')) {
+      db.run("ALTER TABLE inmuebles ADD COLUMN tipo_precio TEXT DEFAULT 'fijo'")
+      db.run("ALTER TABLE inmuebles ADD COLUMN smlv_pactados REAL DEFAULT 0")
+    }
+  }
+
+  // Tablas nuevas — CREATE IF NOT EXISTS es seguro para todas
+  db.run(`CREATE TABLE IF NOT EXISTS pagos_inmueble (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inmueble_id INTEGER NOT NULL REFERENCES inmuebles(id),
+    fecha TEXT NOT NULL,
+    monto REAL NOT NULL,
+    etapa TEXT NOT NULL CHECK(etapa IN ('separacion', 'cuota_inicial', 'financiacion')),
+    nota TEXT
+  )`)
+
+  db.run(`CREATE TABLE IF NOT EXISTS presupuesto_categorias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoria_id INTEGER NOT NULL UNIQUE REFERENCES categorias(id),
+    tope_mensual REAL NOT NULL,
+    activo INTEGER DEFAULT 1
+  )`)
+
+  db.run(`CREATE TABLE IF NOT EXISTS transacciones_detalle (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mes_id INTEGER NOT NULL REFERENCES meses(id),
+    fecha TEXT,
+    hora TEXT,
+    cuenta TEXT,
+    categoria_id INTEGER REFERENCES categorias(id),
+    categoria_nombre_original TEXT,
+    tipo TEXT NOT NULL CHECK(tipo IN ('ingreso', 'gasto')),
+    monto REAL NOT NULL,
+    descripcion TEXT
+  )`)
+
+  db.run(`CREATE TABLE IF NOT EXISTS parametros_globales (
+    clave TEXT PRIMARY KEY,
+    valor TEXT NOT NULL,
+    descripcion TEXT
+  )`)
+
+  db.run(`INSERT OR IGNORE INTO parametros_globales (clave, valor, descripcion) VALUES
+    ('smlv', '1300000', 'Salario Mínimo Legal Vigente en COP'),
+    ('retencion_cdt', '4', 'Retención en la fuente para CDTs (%)')`)
+}
 
 function insertarSemilla() {
   const monedas = db.exec('SELECT COUNT(*) as cnt FROM monedas')
