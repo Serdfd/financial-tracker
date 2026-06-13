@@ -9,7 +9,7 @@ import { getPresupuestoFijos, savePresupuestoFijo, deletePresupuestoFijo, getPre
 import { actualizarTRM } from './services/trm'
 import { getDb } from './database/db'
 import { getParametros, saveParametro } from './database/queries/parametros'
-import { getPagosInmueble, savePagoInmueble, deletePagoInmueble } from './database/queries/inversiones'
+import { getPagosInmueble, savePagoInmueble, deletePagoInmueble, getResumenPortafolio } from './database/queries/inversiones'
 import { getPresupuestoCategorias, savePresupuestoCategoria, deletePresupuestoCategoria } from './database/queries/presupuesto'
 import { saveTransaccionDetalle, getTransaccionesMes, deleteTransaccionesMes } from './database/queries/transacciones'
 
@@ -135,6 +135,8 @@ function registerIpcHandlers() {
   ipcMain.handle('saveLoteInversion', (_, data) => saveLoteInversion(data))
   ipcMain.handle('deleteLoteInversion', (_, id) => deleteLoteInversion(id))
   ipcMain.handle('getResumenLotes', (_, inversion_id) => getResumenLotes(inversion_id))
+
+  ipcMain.handle('getResumenPortafolio', () => getResumenPortafolio())
 
   // Dashboard
   ipcMain.handle('getDashboardData', (_, anio, mes) => {

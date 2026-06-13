@@ -264,6 +264,24 @@ export interface DashboardData {
   distribucionRiesgo: { riesgo: string; color: string; valor: number }[]
 }
 
+export interface ResumenPortafolio {
+  id: number
+  nombre: string
+  fecha_inicio?: string
+  entidad_nombre?: string
+  tipo_nombre?: string
+  riesgo_nombre?: string
+  riesgo_color?: string
+  moneda_codigo?: string
+  tasa_a_cop: number
+  saldo_actual: number
+  saldo_inicial: number
+  aportes_acumulados: number
+  retiros_acumulados: number
+  rendimiento_acumulado: number
+  meses_registrados: number
+}
+
 // ── WINDOW ELECTRON API ────────────────────────────────
 declare global {
   interface Window {
@@ -317,6 +335,7 @@ declare global {
       getDashboardData: (anio: number, mes: number) => Promise<DashboardData>
       getParametros: () => Promise<ParametrosGlobales>
       saveParametro: (clave: string, valor: string) => Promise<void>
+      getResumenPortafolio: () => Promise<ResumenPortafolio[]>
     }
   }
 }

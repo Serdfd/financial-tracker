@@ -316,8 +316,9 @@ function migraciones() {
   )`)
 
   db.run(`INSERT OR IGNORE INTO parametros_globales (clave, valor, descripcion) VALUES
-    ('smlv', '1300000', 'Salario Mínimo Legal Vigente en COP'),
-    ('retencion_cdt', '4', 'Retención en la fuente para CDTs (%)')`)
+  ('smlv', '1300000', 'Salario Mínimo Legal Vigente en COP'),
+  ('retencion_cdt', '4', 'Retención en la fuente para CDTs (%)'),
+  ('rendimiento_minimo_esperado', '10', 'Meta de rentabilidad anual esperada (%)')`)
 }
 
 function insertarSemilla() {

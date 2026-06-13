@@ -364,6 +364,33 @@ export function Configuracion() {
               </div>
             </div>
 
+            {/* Rendimiento mínimo esperado */}
+            <div className="bg-slate-900 rounded-lg p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-white font-medium text-sm">Rendimiento mínimo esperado (%)</p>
+                  <p className="text-slate-400 text-xs mt-0.5">Meta de rentabilidad anual. Se usa para evaluar el desempeño de tus inversiones.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={parametros.rendimiento_minimo_esperado || ''}
+                    onChange={e => setParametros(p => ({ ...p, rendimiento_minimo_esperado: e.target.value }))}
+                    className="w-24 text-right"
+                    placeholder="10"
+                  />
+                  <span className="text-slate-400 text-sm">%</span>
+                  <button
+                    onClick={() => guardarParametro('rendimiento_minimo_esperado', parametros.rendimiento_minimo_esperado)}
+                    disabled={guardandoParams}
+                    className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50">
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            </div>
+
           </div>
         </Card>
       )}

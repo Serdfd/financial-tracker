@@ -6,11 +6,11 @@ import {
 
 const links = [
   { to: '/',               icon: LayoutDashboard, label: 'Dashboard'        },
+  { to: '/analisis',       icon: BarChart3,       label: 'Análisis'         },
   { to: '/cierre',         icon: CalendarCheck,   label: 'Cierre Mensual'   },
   { to: '/inversiones',    icon: TrendingUp,      label: 'Inversiones'      },
   { to: '/presupuesto',    icon: Wallet,          label: 'Presupuesto'      },
   { to: '/transacciones',  icon: List,            label: 'Transacciones'    },
-  { to: '/analisis',       icon: BarChart3,       label: 'Análisis'         },
   { to: '/configuracion',  icon: Settings,        label: 'Configuración'    },
 ]
 

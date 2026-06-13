@@ -366,3 +366,55 @@ export function deletePagoInmueble(id: number): void {
   db.run('DELETE FROM pagos_inmueble WHERE id=?', [id])
   guardarDb()
 }
+
+// ── RESUMEN PORTAFOLIO ─────────────────────────────────
+
+export function getResumenPortafolio(): any[] {
+  const db = getDb()
+  return rowsToObjects(db.exec(
+    `SELECT
+       inv.id, inv.nombre, inv.fecha_inicio,
+       e.nombre as entidad_nombre,
+       t.nombre as tipo_nombre,
+       r.nombre as riesgo_nombre,
+       r.color as riesgo_color,
+       mo.codigo as moneda_codigo,
+       mo.tasa_a_cop,
+       -- Saldo actual (último mes)
+       (SELECT im.saldo_cierre FROM inversion_mensual im
+        JOIN meses m ON im.mes_id = m.id
+        WHERE im.inversion_id = inv.id
+        ORDER BY m.anio DESC, m.mes DESC LIMIT 1) as saldo_actual,
+       -- Saldo inicial (primer mes = mes 0)
+       (SELECT im.saldo_cierre FROM inversion_mensual im
+        JOIN meses m ON im.mes_id = m.id
+        WHERE im.inversion_id = inv.id
+        ORDER BY m.anio ASC, m.mes ASC LIMIT 1) as saldo_inicial,
+       -- Aportes acumulados (excluyendo mes 0)
+       (SELECT COALESCE(SUM(im.aportes), 0) FROM inversion_mensual im
+        JOIN meses m ON im.mes_id = m.id
+        WHERE im.inversion_id = inv.id
+        AND (m.anio * 12 + m.mes) > (
+          SELECT m2.anio * 12 + m2.mes FROM inversion_mensual im2
+          JOIN meses m2 ON im2.mes_id = m2.id
+          WHERE im2.inversion_id = inv.id
+          ORDER BY m2.anio ASC, m2.mes ASC LIMIT 1
+        )) as aportes_acumulados,
+       -- Retiros acumulados
+       (SELECT COALESCE(SUM(im.retiros), 0) FROM inversion_mensual im
+        WHERE im.inversion_id = inv.id) as retiros_acumulados,
+       -- Rendimiento acumulado
+       (SELECT COALESCE(SUM(im.rendimiento), 0) FROM inversion_mensual im
+        WHERE im.inversion_id = inv.id) as rendimiento_acumulado,
+       -- Meses con datos
+       (SELECT COUNT(*) FROM inversion_mensual im WHERE im.inversion_id = inv.id) as meses_registrados
+     FROM inversiones inv
+     LEFT JOIN entidades e ON inv.entidad_id = e.id
+     LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
+     LEFT JOIN perfiles_riesgo r ON inv.riesgo_id = r.id
+     LEFT JOIN monedas mo ON inv.moneda_id = mo.id
+     WHERE inv.activo = 1
+       AND LOWER(t.nombre) != 'inmueble'
+     ORDER BY inv.nombre`
+  ))
+}
