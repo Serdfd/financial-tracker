@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { Mes, IngresoMes, GastoMes, DeudaTC, InversionMensual, Inversion } from '@/types'
 import { formatCOP, formatPct, MESES_NOMBRES } from '@/lib/format'
 
-type Tab = 'ingresos' | 'gastos' | 'inversiones' | 'deudas'
+type Tab = 'ingresos' | 'gastos' | 'inversiones' | 'deudas' | 'cuadre'
 
 export function CierreMensual() {
   const { mesActivo, anioActivo, setMesActivo, categorias, monedas } = useAppStore()
@@ -18,6 +18,8 @@ export function CierreMensual() {
   const [inversiones, setInversiones] = useState<Inversion[]>([])
   const [invMensual, setInvMensual] = useState<Record<number, InversionMensual>>({})
   const [guardando, setGuardando] = useState(false)
+  const [cuadre, setCuadre] = useState<any>(null)
+  const [cargandoCuadre, setCargandoCuadre] = useState(false)
 
   // ── IMPORTACIÓN CSV DETALLE ──────────────────────────
   const inputCsvRef = useRef<HTMLInputElement>(null)
@@ -199,6 +201,17 @@ export function CierreMensual() {
 
   useEffect(() => { cargarDatos() }, [mesActivo, anioActivo])
 
+  useEffect(() => {
+    if (tab === 'cuadre') cargarCuadre()
+  }, [tab, mesActivo, anioActivo])
+
+  async function cargarCuadre() {
+    setCargandoCuadre(true)
+    const data = await window.electronAPI.getCuadreMensual(anioActivo, mesActivo)
+    setCuadre(data)
+    setCargandoCuadre(false)
+  }
+
   async function cargarDatos() {
     const m = await window.electronAPI.getOrCreateMes(anioActivo, mesActivo)
     setMes(m)
@@ -211,7 +224,7 @@ export function CierreMensual() {
     setIngresos(ing)
     setGastos(gas)
     setDeudas(deu)
-    setInversiones(invs)
+    setInversiones(invs.filter(i => i.tipo_nombre?.toLowerCase() !== 'inmueble'))
 
     // Cargar saldos de inversiones para este mes
     const im = await window.electronAPI.getInversionMensualMes(m.id)
@@ -326,6 +339,7 @@ export function CierreMensual() {
     { key: 'gastos', label: `Gastos (${formatCOP(totalGastos)})` },
     { key: 'inversiones', label: `Inversiones (${inversiones.length})` },
     { key: 'deudas', label: `Deudas TC (${formatCOP(totalDeudas)})` },
+    { key: 'cuadre', label: 'Conciliación' },
   ]
 
   return (
@@ -525,11 +539,15 @@ export function CierreMensual() {
                 <tbody className="divide-y divide-slate-700/50">
                   {inversiones.map(inv => {
                     const im = invMensual[inv.id] || { saldo_cierre: 0, aportes: 0, retiros: 0, rendimiento: 0, rentabilidad_pct: 0 }
+                    const esCuenta = !!inv.es_cuenta
                     return (
                       <tr key={inv.id} className="hover:bg-slate-700/30">
                         <td className="py-2 pr-2">
                           <div>
-                            <p className="text-white font-medium truncate">{inv.nombre}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-white font-medium truncate">{inv.nombre}</p>
+                              {esCuenta && <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 shrink-0">Cuenta</span>}
+                            </div>
                             <p className="text-slate-500 text-xs truncate">{inv.entidad_nombre} · {inv.moneda_codigo}</p>
                           </div>
                         </td>
@@ -549,10 +567,10 @@ export function CierreMensual() {
                             className="w-full text-right" placeholder="0" />
                         </td>
                         <td className={`py-2 px-2 text-right font-mono font-medium ${im.rendimiento >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {formatCOP(im.rendimiento || 0)}
+                          {esCuenta ? <span className="text-slate-600">—</span> : formatCOP(im.rendimiento || 0)}
                         </td>
                         <td className={`py-2 pl-2 text-right font-mono ${im.rentabilidad_pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {formatPct(im.rentabilidad_pct || 0)}
+                          {esCuenta ? <span className="text-slate-600">—</span> : formatPct(im.rentabilidad_pct || 0)}
                         </td>
                       </tr>
                     )
@@ -605,6 +623,182 @@ export function CierreMensual() {
          )}
       </Card>
       )}
+      {/* ── TAB: CUADRE ── */}
+      {tab === 'cuadre' && (
+        cargandoCuadre ? (
+          <div className="flex items-center justify-center h-64">
+            <p className="text-slate-400">Calculando cuadre...</p>
+          </div>
+        ) : !cuadre ? (
+          <Card>
+            <p className="text-slate-500 text-center py-8">No hay datos registrados para este mes.</p>
+          </Card>
+        ) : (() => {
+          const cuadraOk = Math.abs(cuadre.diferencia) < 1000
+          const cuadraCerca = Math.abs(cuadre.diferencia) < Math.max(cuadre.ingresos * 0.02, 50000)
+          const color = cuadraOk ? 'green' : cuadraCerca ? 'amber' : 'red'
+          const colorClass = { green: 'text-green-400', amber: 'text-amber-400', red: 'text-red-400' }[color]
+          const borderClass = { green: 'border-green-500/30 bg-green-500/10', amber: 'border-amber-500/30 bg-amber-500/10', red: 'border-red-500/30 bg-red-500/10' }[color]
+          const icono = cuadraOk ? '🟢' : cuadraCerca ? '🟡' : '🔴'
+          const label = cuadraOk ? 'Conciliación correcta' : cuadraCerca ? 'Diferencia menor' : 'Diferencia significativa'
+          return (
+            <div className="space-y-4">
+              {/* Banner estado */}
+              <div className={`flex items-center justify-between p-4 rounded-xl border ${borderClass}`}>
+                <div>
+                  <p className={`text-lg font-bold ${colorClass}`}>{icono} {label}</p>
+                  <p className="text-slate-400 text-sm mt-0.5">
+                    {cuadraOk ? 'Todos los movimientos están bien registrados.' :
+                      cuadre.diferencia > 0
+                        ? 'Hay plata no rastreada: gastos sin registrar o ingresos de más.'
+                        : 'Hay activos que crecieron sin flujo registrado: aportes u otros movimientos no reflejados.'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-slate-400 text-xs mb-0.5">Diferencia</p>
+                  <p className={`text-2xl font-mono font-bold ${colorClass}`}>
+                    {cuadre.diferencia >= 0 ? '+' : ''}{formatCOP(cuadre.diferencia)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Dos columnas */}
+              <div className="grid grid-cols-2 gap-4">
+                <Card>
+                  <h3 className="text-white font-semibold mb-4">Flujo registrado</h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Ingresos</span>
+                      <span className="text-green-400 font-mono">+{formatCOP(cuadre.ingresos)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Gastos</span>
+                      <span className="text-red-400 font-mono">−{formatCOP(cuadre.gastos)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Rendimientos</span>
+                      <span className={`font-mono ${cuadre.rendimientos >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>
+                        {cuadre.rendimientos >= 0 ? '+' : ''}{formatCOP(cuadre.rendimientos)}
+                      </span>
+                    </div>
+                    <div className="pt-3 border-t border-slate-700 flex justify-between">
+                      <span className="text-white font-semibold">Crecimiento teórico</span>
+                      <span className={`font-mono font-bold text-base ${cuadre.crecimientoTeorico >= 0 ? 'text-indigo-400' : 'text-red-400'}`}>
+                        {cuadre.crecimientoTeorico >= 0 ? '+' : ''}{formatCOP(cuadre.crecimientoTeorico)}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card>
+                  <h3 className="text-white font-semibold mb-4">Cambio en balances</h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <div>
+                        <span className="text-slate-400">Δ Activos</span>
+                        <span className="text-xs text-slate-500 ml-1">(inv+cuentas, excl. inmuebles)</span>
+                      </div>
+                      <span className={`font-mono ${cuadre.deltaSaldos >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {cuadre.deltaSaldos >= 0 ? '+' : ''}{formatCOP(cuadre.deltaSaldos)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>Anterior: {formatCOP(cuadre.totalSaldosAnteriores)}</span>
+                      <span>Actual: {formatCOP(cuadre.totalSaldosActuales)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <div>
+                        <span className="text-slate-400">Δ Deudas TC</span>
+                        <span className="text-xs text-slate-500 ml-1">(efecto patrimonio)</span>
+                      </div>
+                      <span className={`font-mono ${cuadre.deltaDeudas <= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {cuadre.deltaDeudas > 0 ? '−' : '+'}{formatCOP(Math.abs(cuadre.deltaDeudas))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>Anterior: {formatCOP(cuadre.deudasAnteriores)}</span>
+                      <span>Actual: {formatCOP(cuadre.deudasActuales)}</span>
+                    </div>
+                    <div className="pt-3 border-t border-slate-700 flex justify-between">
+                      <span className="text-white font-semibold">Crecimiento real</span>
+                      <span className={`font-mono font-bold text-base ${cuadre.crecimientoReal >= 0 ? 'text-indigo-400' : 'text-red-400'}`}>
+                        {cuadre.crecimientoReal >= 0 ? '+' : ''}{formatCOP(cuadre.crecimientoReal)}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Desglose por activo */}
+              <Card>
+                <h3 className="text-white font-semibold mb-3">Desglose por activo</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-700 text-right">
+                        <th className="text-left py-2 pr-3">Activo</th>
+                        <th className="py-2 px-3">Saldo mes anterior</th>
+                        <th className="py-2 px-3">Saldo cierre</th>
+                        <th className="py-2 pl-3">Δ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/50">
+                      {cuadre.detalle.map((d: any) => (
+                        <tr key={d.inversion_id} className="hover:bg-slate-700/20 text-right">
+                          <td className="py-2 pr-3 text-left">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-white">{d.nombre}</span>
+                              {d.es_cuenta === 1 && <span className="text-xs px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-400">Cuenta</span>}
+                            </div>
+                            <p className="text-slate-500 text-xs">{d.tipo_nombre || '—'}</p>
+                          </td>
+                          <td className="py-2 px-3 font-mono text-slate-400">{formatCOP(d.saldo_anterior)}</td>
+                          <td className="py-2 px-3 font-mono text-white">{formatCOP(d.saldo_actual)}</td>
+                          <td className={`py-2 pl-3 font-mono font-bold ${d.delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {d.delta >= 0 ? '+' : ''}{formatCOP(d.delta)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-slate-600 text-right font-bold">
+                        <td className="py-2 pr-3 text-left text-white">Total</td>
+                        <td className="py-2 px-3 font-mono text-slate-400">{formatCOP(cuadre.totalSaldosAnteriores)}</td>
+                        <td className="py-2 px-3 font-mono text-white">{formatCOP(cuadre.totalSaldosActuales)}</td>
+                        <td className={`py-2 pl-3 font-mono ${cuadre.deltaSaldos >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {cuadre.deltaSaldos >= 0 ? '+' : ''}{formatCOP(cuadre.deltaSaldos)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <p className="text-slate-500 text-xs mt-3">* Los inmuebles se excluyen porque su valor no varía mensualmente por flujo de caja.</p>
+              </Card>
+
+              {/* Guía de diferencias */}
+              {!cuadraOk && (
+                <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 text-sm">
+                  <p className="text-white font-medium mb-2">¿Por qué puede haber diferencia?</p>
+                  {cuadre.diferencia > 0 ? (
+                    <ul className="list-disc list-inside space-y-1 text-slate-400">
+                      <li>Gastos en efectivo no registrados como gasto</li>
+                      <li>Ingreso registrado que en realidad fue un aporte a inversión</li>
+                      <li>Retiro de inversión no registrado como ingreso</li>
+                    </ul>
+                  ) : (
+                    <ul className="list-disc list-inside space-y-1 text-slate-400">
+                      <li>Aporte a inversión no registrado como ingreso previo</li>
+                      <li>Pago de TC registrado como gasto (solo registra el saldo pendiente)</li>
+                      <li>Saldo de inversión actualizado sin el rendimiento correspondiente</li>
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })()
+      )}
+
       {/* ── MODAL IMPORTAR CSV DETALLE ── */}
       <Modal open={modalCsv} onClose={() => { setModalCsv(false); setCsvRows([]) }}
         titulo="Importar movimientos desde CSV" ancho="max-w-3xl">

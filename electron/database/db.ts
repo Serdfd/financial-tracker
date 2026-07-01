@@ -319,6 +319,24 @@ function migraciones() {
   ('smlv', '1300000', 'Salario Mínimo Legal Vigente en COP'),
   ('retencion_cdt', '4', 'Retención en la fuente para CDTs (%)'),
   ('rendimiento_minimo_esperado', '10', 'Meta de rentabilidad anual esperada (%)')`)
+
+  // es_cuenta en inversiones — para BDs existentes
+  const infoInv = db.exec("PRAGMA table_info(inversiones)")
+  if (infoInv.length) {
+    const cols = infoInv[0].values.map((r: any[]) => r[1])
+    if (!cols.includes('es_cuenta')) {
+      db.run("ALTER TABLE inversiones ADD COLUMN es_cuenta INTEGER DEFAULT 0")
+    }
+  }
+
+  // Tipos de cuenta líquida — para BDs nuevas y existentes
+  const tiposExistentes: string[] = db.exec('SELECT nombre FROM tipos_inversion')
+    .flatMap((r: any) => r.values.map((row: any[]) => row[0]))
+  for (const nombre of ['Cuenta Corriente / Ahorros', 'Tarjeta Alimentación', 'Fondo Empleados', 'Efectivo']) {
+    if (!tiposExistentes.includes(nombre)) {
+      db.run('INSERT INTO tipos_inversion (nombre) VALUES (?)', [nombre])
+    }
+  }
 }
 
 function insertarSemilla() {

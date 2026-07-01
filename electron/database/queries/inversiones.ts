@@ -25,7 +25,7 @@ export function getInversiones(): any[] {
      LEFT JOIN perfiles_riesgo r ON inv.riesgo_id = r.id
      LEFT JOIN monedas m ON inv.moneda_id = m.id
      WHERE inv.activo = 1
-     ORDER BY inv.nombre`
+     ORDER BY COALESCE(e.nombre, '') ASC, inv.nombre ASC`
   ))
 }
 
@@ -36,16 +36,18 @@ export function saveInversion(data: any): any {
   if (data.id) {
     db.run(
       `UPDATE inversiones SET nombre=?, entidad_id=?, tipo_id=?, riesgo_id=?,
-       moneda_id=?, estado=?, fecha_inicio=?, notas=? WHERE id=?`,
-      [data.nombre, data.entidad_id, data.tipo_id, data.riesgo_id,
-       data.moneda_id, data.estado, data.fecha_inicio, data.notas, data.id]
+       moneda_id=?, estado=?, fecha_inicio=?, notas=?, es_cuenta=? WHERE id=?`,
+      [data.nombre, data.entidad_id || null, data.tipo_id || null, data.riesgo_id || null,
+       data.moneda_id || null, data.estado || 'activo', data.fecha_inicio || null, data.notas || null,
+       data.es_cuenta ? 1 : 0, data.id]
     )
   } else {
     db.run(
-      `INSERT INTO inversiones (nombre, entidad_id, tipo_id, riesgo_id, moneda_id, estado, fecha_inicio, notas)
-       VALUES (?,?,?,?,?,?,?,?)`,
-      [data.nombre, data.entidad_id, data.tipo_id, data.riesgo_id,
-       data.moneda_id, data.estado || 'activo', data.fecha_inicio, data.notas]
+      `INSERT INTO inversiones (nombre, entidad_id, tipo_id, riesgo_id, moneda_id, estado, fecha_inicio, notas, es_cuenta)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      [data.nombre, data.entidad_id || null, data.tipo_id || null, data.riesgo_id || null,
+       data.moneda_id || null, data.estado || 'activo', data.fecha_inicio || null, data.notas || null,
+       data.es_cuenta ? 1 : 0]
     )
     const lastId = rowsToObjects(db.exec('SELECT last_insert_rowid() as id'))
     inversionId = lastId[0]?.id
@@ -106,6 +108,7 @@ export function getInversionMensualMes(mes_id: number): any[] {
   const db = getDb()
   return rowsToObjects(db.exec(
     `SELECT im.*, inv.nombre as inversion_nombre, inv.id as inversion_id,
+       inv.es_cuenta,
        r.color as riesgo_color, r.nombre as riesgo_nombre,
        t.nombre as tipo_nombre, mo.tasa_a_cop
      FROM inversion_mensual im
@@ -415,6 +418,7 @@ export function getResumenPortafolio(): any[] {
      LEFT JOIN monedas mo ON inv.moneda_id = mo.id
      WHERE inv.activo = 1
        AND LOWER(t.nombre) != 'inmueble'
+       AND (inv.es_cuenta = 0 OR inv.es_cuenta IS NULL)
      ORDER BY inv.nombre`
   ))
 }

@@ -176,7 +176,8 @@ function registerIpcHandlers() {
     const rendimientosResult = rowsToObjects(db.exec(
       `SELECT COALESCE(SUM(im.rendimiento * mo.tasa_a_cop), 0) as total
        FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
-       LEFT JOIN monedas mo ON inv.moneda_id = mo.id WHERE im.mes_id = ?`, [mesActual.id]
+       LEFT JOIN monedas mo ON inv.moneda_id = mo.id
+       WHERE im.mes_id = ? AND (inv.es_cuenta = 0 OR inv.es_cuenta IS NULL)`, [mesActual.id]
     ))
     const rendimientos = rendimientosResult[0]?.total || 0
 
@@ -241,7 +242,8 @@ function registerIpcHandlers() {
       `SELECT inv.nombre, im.saldo_cierre * mo.tasa_a_cop as valor
        FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
        LEFT JOIN monedas mo ON inv.moneda_id = mo.id
-       WHERE im.mes_id = ? AND im.saldo_cierre > 0`, [mesActual.id]
+       WHERE im.mes_id = ? AND im.saldo_cierre > 0
+         AND (inv.es_cuenta = 0 OR inv.es_cuenta IS NULL)`, [mesActual.id]
     ))
 
     const distribucionTipos = rowsToObjects(db.exec(
@@ -249,7 +251,9 @@ function registerIpcHandlers() {
        FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
        LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
        LEFT JOIN monedas mo ON inv.moneda_id = mo.id
-       WHERE im.mes_id = ? AND im.saldo_cierre > 0 GROUP BY t.nombre`, [mesActual.id]
+       WHERE im.mes_id = ? AND im.saldo_cierre > 0
+         AND (inv.es_cuenta = 0 OR inv.es_cuenta IS NULL)
+       GROUP BY t.nombre`, [mesActual.id]
     ))
 
     const distribucionRiesgo = rowsToObjects(db.exec(
@@ -257,7 +261,9 @@ function registerIpcHandlers() {
        FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
        LEFT JOIN perfiles_riesgo r ON inv.riesgo_id = r.id
        LEFT JOIN monedas mo ON inv.moneda_id = mo.id
-       WHERE im.mes_id = ? AND im.saldo_cierre > 0 GROUP BY r.nombre, r.color`, [mesActual.id]
+       WHERE im.mes_id = ? AND im.saldo_cierre > 0
+         AND (inv.es_cuenta = 0 OR inv.es_cuenta IS NULL)
+       GROUP BY r.nombre, r.color`, [mesActual.id]
     ))
 
     return {
@@ -266,6 +272,128 @@ function registerIpcHandlers() {
       deudasTC,
       ultimos6Meses, ultimos12Meses,
       distribucionInversiones, distribucionTipos, distribucionRiesgo
+    }
+  })
+
+  // ── CUADRE MENSUAL ────────────────────────────────────
+  ipcMain.handle('getCuadreMensual', (_, anio: number, mes: number) => {
+    const db = getDb()
+
+    function r2o(result: any[]): any[] {
+      if (!result.length) return []
+      const [{ columns, values }] = result
+      return values.map((row: any[]) =>
+        Object.fromEntries(columns.map((col: string, i: number) => [col, row[i]]))
+      )
+    }
+
+    const mesActual = r2o(db.exec('SELECT * FROM meses WHERE anio = ? AND mes = ?', [anio, mes]))[0]
+    if (!mesActual) return null
+
+    const ingresos = r2o(db.exec(
+      `SELECT COALESCE(SUM(i.monto * COALESCE(m.tasa_a_cop, 1)), 0) as total
+       FROM ingresos_mes i LEFT JOIN monedas m ON i.moneda_id = m.id WHERE i.mes_id = ?`,
+      [mesActual.id]
+    ))[0]?.total || 0
+
+    const gastos = r2o(db.exec(
+      `SELECT COALESCE(SUM(g.monto * COALESCE(m.tasa_a_cop, 1)), 0) as total
+       FROM gastos_mes g LEFT JOIN monedas m ON g.moneda_id = m.id WHERE g.mes_id = ?`,
+      [mesActual.id]
+    ))[0]?.total || 0
+
+    // Rendimientos excluye cuentas e inmuebles (no generan rendimiento real)
+    const rendimientos = r2o(db.exec(
+      `SELECT COALESCE(SUM(im.rendimiento * COALESCE(mo.tasa_a_cop, 1)), 0) as total
+       FROM inversion_mensual im
+       JOIN inversiones inv ON im.inversion_id = inv.id
+       LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
+       LEFT JOIN monedas mo ON inv.moneda_id = mo.id
+       WHERE im.mes_id = ?
+         AND (inv.es_cuenta = 0 OR inv.es_cuenta IS NULL)
+         AND LOWER(COALESCE(t.nombre,'')) != 'inmueble'`,
+      [mesActual.id]
+    ))[0]?.total || 0
+
+    const crecimientoTeorico = ingresos - gastos + rendimientos
+
+    // Saldos actuales de todas las inversiones activas (excl. inmuebles)
+    const saldosActuales = r2o(db.exec(
+      `SELECT inv.id as inversion_id, inv.nombre, inv.es_cuenta,
+         COALESCE(im.saldo_cierre, 0) * COALESCE(mo.tasa_a_cop, 1) as saldo_cop,
+         t.nombre as tipo_nombre
+       FROM inversiones inv
+       LEFT JOIN inversion_mensual im ON im.inversion_id = inv.id AND im.mes_id = ?
+       LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
+       LEFT JOIN monedas mo ON inv.moneda_id = mo.id
+       WHERE inv.activo = 1
+         AND LOWER(COALESCE(t.nombre,'')) != 'inmueble'`,
+      [mesActual.id]
+    ))
+
+    // Saldo más reciente anterior al mes actual, por inversión (excl. inmuebles)
+    const saldosAnteriores = r2o(db.exec(
+      `SELECT im.inversion_id,
+         im.saldo_cierre * COALESCE(mo.tasa_a_cop, 1) as saldo_cop
+       FROM inversion_mensual im
+       JOIN meses m ON im.mes_id = m.id
+       JOIN inversiones inv ON im.inversion_id = inv.id
+       LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id
+       LEFT JOIN monedas mo ON inv.moneda_id = mo.id
+       WHERE LOWER(COALESCE(t.nombre,'')) != 'inmueble'
+         AND (m.anio * 12 + m.mes) < (? * 12 + ?)
+         AND (m.anio * 12 + m.mes) = (
+           SELECT MAX(m2.anio * 12 + m2.mes)
+           FROM inversion_mensual im2
+           JOIN meses m2 ON im2.mes_id = m2.id
+           WHERE im2.inversion_id = im.inversion_id
+             AND (m2.anio * 12 + m2.mes) < (? * 12 + ?)
+         )`,
+      [anio, mes, anio, mes]
+    ))
+
+    const mapAnteriores: Record<number, number> = {}
+    saldosAnteriores.forEach((s: any) => { mapAnteriores[s.inversion_id] = s.saldo_cop })
+
+    const detalle = saldosActuales
+      .filter((s: any) => (s.saldo_cop || 0) > 0 || (mapAnteriores[s.inversion_id] || 0) > 0)
+      .map((s: any) => ({
+        inversion_id: s.inversion_id,
+        nombre: s.nombre,
+        es_cuenta: s.es_cuenta,
+        tipo_nombre: s.tipo_nombre,
+        saldo_anterior: mapAnteriores[s.inversion_id] || 0,
+        saldo_actual: s.saldo_cop || 0,
+        delta: (s.saldo_cop || 0) - (mapAnteriores[s.inversion_id] || 0)
+      }))
+
+    const totalSaldosActuales = detalle.reduce((s: number, d: any) => s + d.saldo_actual, 0)
+    const totalSaldosAnteriores = detalle.reduce((s: number, d: any) => s + d.saldo_anterior, 0)
+    const deltaSaldos = totalSaldosActuales - totalSaldosAnteriores
+
+    const deudasActuales = r2o(db.exec(
+      `SELECT COALESCE(SUM(saldo), 0) as total FROM deudas_tc WHERE mes_id = ?`,
+      [mesActual.id]
+    ))[0]?.total || 0
+
+    const mesAntNum = mes === 1 ? 12 : mes - 1
+    const anioAntNum = mes === 1 ? anio - 1 : anio
+    const mesAnteriorRow = r2o(db.exec('SELECT id FROM meses WHERE anio = ? AND mes = ?', [anioAntNum, mesAntNum]))[0]
+    const deudasAnteriores = mesAnteriorRow ? (r2o(db.exec(
+      `SELECT COALESCE(SUM(saldo), 0) as total FROM deudas_tc WHERE mes_id = ?`,
+      [mesAnteriorRow.id]
+    ))[0]?.total || 0) : 0
+
+    const deltaDeudas = deudasActuales - deudasAnteriores
+    const crecimientoReal = deltaSaldos - deltaDeudas
+    const diferencia = crecimientoTeorico - crecimientoReal
+
+    return {
+      ingresos, gastos, rendimientos, crecimientoTeorico,
+      deltaSaldos, totalSaldosActuales, totalSaldosAnteriores,
+      deltaDeudas, deudasActuales, deudasAnteriores,
+      crecimientoReal, diferencia,
+      detalle
     }
   })
 }

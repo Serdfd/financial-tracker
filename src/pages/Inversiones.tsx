@@ -77,6 +77,7 @@ export function Inversiones() {
       id: inv.id, nombre: inv.nombre, entidad_id: inv.entidad_id,
       tipo_id: inv.tipo_id, riesgo_id: inv.riesgo_id, moneda_id: inv.moneda_id,
       estado: inv.estado, fecha_inicio: inv.fecha_inicio, notas: inv.notas,
+      es_cuenta: inv.es_cuenta || 0,
     })
     setModalInversion(true)
   }
@@ -217,6 +218,8 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
   }
 
   const inmuebles = inversiones.filter(i => i.tipo_nombre === 'Inmueble')
+  const cuentas = inversiones.filter(i => i.es_cuenta === 1)
+  const inversionesPuras = inversiones.filter(i => !i.es_cuenta && i.tipo_nombre !== 'Inmueble')
 
   return (
     <div className="p-6 overflow-y-auto h-screen">
@@ -257,7 +260,7 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
                   </button>
                 </Card>
               )}
-              {inversiones.map(inv => (
+              {inversionesPuras.map(inv => (
                 <Card key={inv.id} onClick={() => verDetalle(inv)}
                   className={`cursor-pointer transition-all ${seleccionada?.id === inv.id ? 'border-indigo-500' : ''}`}>
                   <div className="flex items-center justify-between">
@@ -279,6 +282,37 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
                   </div>
                 </Card>
               ))}
+
+              {cuentas.length > 0 && (
+                <>
+                  <div className="flex items-center gap-3 mt-2">
+                    <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Cuentas y Saldos</p>
+                    <div className="flex-1 h-px bg-slate-700" />
+                  </div>
+                  {cuentas.map(inv => (
+                    <Card key={inv.id} onClick={() => verDetalle(inv)}
+                      className={`cursor-pointer transition-all ${seleccionada?.id === inv.id ? 'border-cyan-500' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-1">
+                            <p className="text-white font-semibold">{inv.nombre}</p>
+                            <Badge label="Cuenta" color="#06b6d4" />
+                            {inv.tipo_nombre && <Badge label={inv.tipo_nombre} color="#0891b2" />}
+                          </div>
+                          <p className="text-slate-500 text-xs">{inv.entidad_nombre || 'Sin entidad'} · {inv.moneda_codigo}</p>
+                        </div>
+                        <div className="text-right flex items-center gap-3">
+                          <div>
+                            <p className="text-slate-400 text-xs">Desde</p>
+                            <p className="text-slate-300 text-sm">{inv.fecha_inicio || '—'}</p>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-500" />
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </>
+              )}
             </>
           )}
 
@@ -526,19 +560,21 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
               </select>
             </div>
             <div>
-              <label className="text-slate-400 text-sm block mb-1">Tipo de inversión</label>
+              <label className="text-slate-400 text-sm block mb-1">Tipo</label>
               <select value={form.tipo_id || ''} onChange={e => setForm((p: any) => ({ ...p, tipo_id: Number(e.target.value) }))}>
                 <option value="">Sin tipo</option>
                 {tiposInversion.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
               </select>
             </div>
-            <div>
-              <label className="text-slate-400 text-sm block mb-1">Perfil de riesgo</label>
-              <select value={form.riesgo_id || ''} onChange={e => setForm((p: any) => ({ ...p, riesgo_id: Number(e.target.value) }))}>
-                <option value="">Sin perfil</option>
-                {perfilesRiesgo.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
-              </select>
-            </div>
+            {!form.es_cuenta && (
+              <div>
+                <label className="text-slate-400 text-sm block mb-1">Perfil de riesgo</label>
+                <select value={form.riesgo_id || ''} onChange={e => setForm((p: any) => ({ ...p, riesgo_id: Number(e.target.value) }))}>
+                  <option value="">Sin perfil</option>
+                  {perfilesRiesgo.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <label className="text-slate-400 text-sm block mb-1">Moneda</label>
               <select value={form.moneda_id || ''} onChange={e => setForm((p: any) => ({ ...p, moneda_id: Number(e.target.value) }))}>
@@ -559,6 +595,13 @@ function getTipoFicha(inv: Inversion | null): 'cdt' | 'acciones' | 'crypto' | 's
               </select>
             </div>
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={!!form.es_cuenta}
+              onChange={e => setForm((p: any) => ({ ...p, es_cuenta: e.target.checked ? 1 : 0 }))}
+              className="w-4 h-4 rounded accent-cyan-500" />
+            <span className="text-slate-300 text-sm">Es cuenta / saldo líquido <span className="text-slate-500">(sin rendimiento — tarjeta alimentación, fondo empleados, ahorros)</span></span>
+          </label>
 
           {/* Saldo inicial OPCIONAL — no aplica para inmuebles */}
           {!form.id && getTipoNombre(form.tipo_id) !== 'inmueble' && (

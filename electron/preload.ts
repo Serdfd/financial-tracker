@@ -83,4 +83,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDashboardData: (anio: number, mes: number) => ipcRenderer.invoke('getDashboardData', anio, mes),
 
   getResumenPortafolio: () => ipcRenderer.invoke('getResumenPortafolio'),
+
+  getCuadreMensual: (anio: number, mes: number) => ipcRenderer.invoke('getCuadreMensual', anio, mes),
 })

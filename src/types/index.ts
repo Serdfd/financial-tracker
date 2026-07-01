@@ -137,6 +137,7 @@ export interface Inversion {
   fecha_inicio?: string
   notas?: string
   activo: number
+  es_cuenta?: number
   entidad_nombre?: string
   tipo_nombre?: string
   riesgo_nombre?: string
@@ -336,6 +337,7 @@ declare global {
       getParametros: () => Promise<ParametrosGlobales>
       saveParametro: (clave: string, valor: string) => Promise<void>
       getResumenPortafolio: () => Promise<ResumenPortafolio[]>
+      getCuadreMensual: (anio: number, mes: number) => Promise<any>
     }
   }
 }
