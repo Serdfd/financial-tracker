@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Download } from 'lucide-react'
 import ReactApexChart from 'react-apexcharts'
 import { Card } from '@/components/ui/Card'
 import { useAppStore } from '@/store/useAppStore'
@@ -34,7 +35,8 @@ export function Analisis() {
   const [historialInv, setHistorialInv] = useState<any[]>([])
 
   const categoriasGasto = categorias.filter(c => c.tipo === 'gasto')
-  const anios = [2023, 2024, 2025, 2026, 2027]
+  const anioActual = new Date().getFullYear()
+  const anios = Array.from({ length: 8 }, (_, i) => anioActual - 3 + i)
 
   const [parametros, setParametros] = useState<Record<string, string>>({ rendimiento_minimo_esperado: '10' })
 
@@ -335,7 +337,23 @@ export function Analisis() {
             </div>
 
             <Card>
-              <h3 className="text-white font-semibold mb-4">Resumen mes a mes</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold">Resumen mes a mes</h3>
+                <button
+                  onClick={async () => {
+                    const enc = ['Mes', 'Año', 'Ingresos', 'Gastos', 'Rendimientos', 'Crecimiento Neto', 'Patrimonio Cierre']
+                    const rows = filas.map(f => [
+                      MESES_NOMBRES[f.mes], String(f.anio),
+                      String(f.ingresos), String(f.gastos),
+                      String(f.rendimientos), String(f.crecimientoNeto), String(f.patrimonio)
+                    ])
+                    await window.electronAPI.exportarCSV({ filas: [enc, ...rows], nombreSugerido: 'analisis-flujo.csv' })
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors"
+                >
+                  <Download size={14} /> Exportar
+                </button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>

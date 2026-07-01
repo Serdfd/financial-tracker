@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Search, Download } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { useAppStore } from '@/store/useAppStore'
 import { TransaccionDetalle } from '@/types'
@@ -34,7 +34,8 @@ export function Transacciones() {
   const totalIngresos = filtradas.filter(t => t.tipo === 'ingreso').reduce((s, t) => s + t.monto, 0)
   const totalGastos = filtradas.filter(t => t.tipo === 'gasto').reduce((s, t) => s + t.monto, 0)
 
-  const anios = [2023, 2024, 2025, 2026, 2027]
+  const anioActual = new Date().getFullYear()
+  const anios = Array.from({ length: 8 }, (_, i) => anioActual - 3 + i)
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-screen">
@@ -51,6 +52,29 @@ export function Transacciones() {
           <select value={anioActivo} onChange={e => setMesActivo(mesActivo, Number(e.target.value))} className="w-24">
             {anios.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
+          {filtradas.length > 0 && (
+            <button
+              onClick={async () => {
+                const encabezado = ['Fecha', 'Hora', 'Cuenta', 'Categoría', 'Categoría Original', 'Tipo', 'Monto', 'Descripción']
+                const filas = [
+                  encabezado,
+                  ...filtradas.map(t => [
+                    t.fecha ?? '', t.hora ?? '', t.cuenta ?? '',
+                    t.categoria_nombre ?? t.categoria_nombre_original,
+                    t.categoria_nombre_original, t.tipo,
+                    String(t.monto), t.descripcion ?? ''
+                  ])
+                ]
+                await window.electronAPI.exportarCSV({
+                  filas,
+                  nombreSugerido: `transacciones-${MESES_NOMBRES[mesActivo].toLowerCase()}-${anioActivo}.csv`
+                })
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors"
+            >
+              <Download size={14} /> Exportar
+            </button>
+          )}
         </div>
       </div>
 

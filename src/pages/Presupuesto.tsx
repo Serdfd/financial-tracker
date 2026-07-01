@@ -118,7 +118,7 @@ export function Presupuesto() {
             {MESES_NOMBRES.slice(1).map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
           </select>
           <select value={anioActivo} onChange={e => setMesActivo(mesActivo, Number(e.target.value))} className="w-24">
-            {[2023, 2024, 2025, 2026, 2027].map(a => <option key={a} value={a}>{a}</option>)}
+            {Array.from({ length: 8 }, (_, i) => new Date().getFullYear() - 3 + i).map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
       </div>

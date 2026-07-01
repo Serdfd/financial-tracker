@@ -158,21 +158,31 @@ export function CierreMensual() {
     }
 
     // Siempre guardar detalle
+    let importadas = 0
+    let duplicadas = 0
     for (const fila of filasValidas) {
-      await window.electronAPI.saveTransaccionDetalle({
+      const guardada = await window.electronAPI.saveTransaccionDetalle({
         mes_id: mes.id,
         fecha: fila.fecha, hora: fila.hora, cuenta: fila.cuenta,
         categoria_id: fila.categoria_id,
         categoria_nombre_original: fila.categoria_nombre_original,
         tipo: fila.tipo, monto: fila.monto, descripcion: fila.descripcion
       })
+      if (guardada) importadas++; else duplicadas++
     }
+
+    // Aplicar reglas de categorización a las que quedaron sin categoría
+    const aplicadas = await window.electronAPI.aplicarReglasAMes(mes.id)
 
     await cargarDatos()
     setModalCsv(false)
     setCsvRows([])
     setSoloDetalle(false)
     setImportando(false)
+    const msg = [`${importadas} transacciones importadas`]
+    if (duplicadas > 0) msg.push(`${duplicadas} duplicadas omitidas`)
+    if (aplicadas > 0) msg.push(`${aplicadas} categorizadas por reglas`)
+    alert(msg.join(' · '))
   }
 
   // Agrupar filas por tipo y categoria para el preview
@@ -355,7 +365,7 @@ export function CierreMensual() {
             {MESES_NOMBRES.slice(1).map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
           </select>
           <select value={anioActivo} onChange={e => setMesActivo(mesActivo, Number(e.target.value))} className="w-24">
-            {[2023, 2024, 2025, 2026, 2027].map(a => <option key={a} value={a}>{a}</option>)}
+            {Array.from({ length: 8 }, (_, i) => new Date().getFullYear() - 3 + i).map(a => <option key={a} value={a}>{a}</option>)}
           </select>
           {!cerrado && (
             <button

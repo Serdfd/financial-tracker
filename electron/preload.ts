@@ -25,6 +25,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveTransaccionDetalle: (data: any) => ipcRenderer.invoke('saveTransaccionDetalle', data),
   getTransaccionesMes: (mes_id: number) => ipcRenderer.invoke('getTransaccionesMes', mes_id),
   deleteTransaccionesMes: (mes_id: number) => ipcRenderer.invoke('deleteTransaccionesMes', mes_id),
+  updateTransaccionCategoria: (id: number, categoria_id: number | null) => ipcRenderer.invoke('updateTransaccionCategoria', id, categoria_id),
+  buscarTransacciones: (filtros: any) => ipcRenderer.invoke('buscarTransacciones', filtros),
+
+  // Reglas de categorización
+  getReglasCategorizacion: () => ipcRenderer.invoke('getReglasCategorizacion'),
+  saveReglaCategorizacion: (data: any) => ipcRenderer.invoke('saveReglaCategorizacion', data),
+  deleteReglaCategorizacion: (id: number) => ipcRenderer.invoke('deleteReglaCategorizacion', id),
+  aplicarReglasAMes: (mes_id: number) => ipcRenderer.invoke('aplicarReglasAMes', mes_id),
+
+  // Export CSV
+  exportarCSV: (payload: { filas: string[][], nombreSugerido: string }) => ipcRenderer.invoke('exportarCSV', payload),
 
   // Deudas TC
   getDeudasTC: (mes_id: number) => ipcRenderer.invoke('getDeudasTC', mes_id),

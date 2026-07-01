@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Check, X, RefreshCw } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { useAppStore } from '@/store/useAppStore'
-import { Categoria, Entidad, Moneda, PerfilRiesgo, TipoInversion } from '@/types'
+import { Categoria, Entidad, Moneda, PerfilRiesgo, TipoInversion, ReglaCategorizacion } from '@/types'
 
-type TabConfig = 'entidades' | 'tipos' | 'riesgos' | 'categorias' | 'monedas' | 'parametros'
+type TabConfig = 'entidades' | 'tipos' | 'riesgos' | 'categorias' | 'monedas' | 'parametros' | 'reglas'
 
 // Emojis predefinidos para categorías financieras
 const EMOJIS_DISPONIBLES = [
@@ -16,7 +16,7 @@ const EMOJIS_DISPONIBLES = [
 ]
 
 export function Configuracion() {
-  const { cargarCatalogos } = useAppStore()
+  const { cargarCatalogos, categorias: todasCategorias } = useAppStore()
   const [tab, setTab] = useState<TabConfig>('entidades')
   const [entidades, setEntidades] = useState<Entidad[]>([])
   const [tipos, setTipos] = useState<TipoInversion[]>([])
@@ -26,6 +26,10 @@ export function Configuracion() {
   const [subTabCat, setSubTabCat] = useState<'ingreso' | 'gasto'>('ingreso')
   const [actualizandoTRM, setActualizandoTRM] = useState(false)
   const [trmMensaje, setTrmMensaje] = useState('')
+
+  // Reglas de categorización
+  const [reglas, setReglas] = useState<ReglaCategorizacion[]>([])
+  const [nuevaRegla, setNuevaRegla] = useState<Partial<ReglaCategorizacion>>({ tipo_patron: 'contiene', tipo: 'ambos', prioridad: 0 })
 
   const [parametros, setParametros] = useState<Record<string, string>>({ smlv: '1300000', retencion_cdt: '4' })
   const [guardandoParams, setGuardandoParams] = useState(false)
@@ -47,6 +51,15 @@ export function Configuracion() {
   const [nuevo, setNuevo] = useState<any>(null)
 
   useEffect(() => { cargar() }, [tab])
+
+  async function cargarReglas() {
+    const r = await window.electronAPI.getReglasCategorizacion()
+    setReglas(r)
+  }
+
+  useEffect(() => {
+    if (tab === 'reglas') cargarReglas()
+  }, [tab])
 
   async function cargar() {
     const [e, t, r, c, m] = await Promise.all([
@@ -96,7 +109,8 @@ export function Configuracion() {
     { key: 'tipos', label: 'Tipos de Inversión' },
     { key: 'riesgos', label: 'Perfiles de Riesgo' },
     { key: 'categorias', label: 'Categorías' },
-    { key: 'monedas', label: 'Monedas' },    
+    { key: 'monedas', label: 'Monedas' },
+    { key: 'reglas', label: 'Reglas de Categorización' },
   ]
 
   return (
@@ -393,6 +407,171 @@ export function Configuracion() {
 
           </div>
         </Card>
+      )}
+
+      {/* ── REGLAS DE CATEGORIZACIÓN ── */}
+      {tab === 'reglas' && (
+        <div className="space-y-4">
+          <Card>
+            <h3 className="text-white font-semibold mb-1">Reglas de categorización automática</h3>
+            <p className="text-slate-400 text-xs mb-4">
+              Al importar un CSV, si la categoría original de una transacción no coincide exactamente con una categoría del sistema,
+              se aplican estas reglas en orden de prioridad (mayor = primero).
+            </p>
+
+            {/* Formulario nueva regla */}
+            <div className="bg-slate-900 rounded-lg p-4 mb-4">
+              <p className="text-slate-300 text-sm font-medium mb-3">Agregar regla</p>
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <label className="text-slate-400 text-xs block mb-1">Patrón (texto a buscar)</label>
+                  <input
+                    type="text"
+                    value={nuevaRegla.patron || ''}
+                    onChange={e => setNuevaRegla(r => ({ ...r, patron: e.target.value }))}
+                    placeholder="Ej: supermercado, Netflix, Uber..."
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-xs block mb-1">Tipo de coincidencia</label>
+                  <select
+                    value={nuevaRegla.tipo_patron || 'contiene'}
+                    onChange={e => setNuevaRegla(r => ({ ...r, tipo_patron: e.target.value as any }))}
+                    className="w-full"
+                  >
+                    <option value="contiene">Contiene</option>
+                    <option value="igual">Igual exacto</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-400 text-xs block mb-1">Aplica a</label>
+                  <select
+                    value={nuevaRegla.tipo || 'ambos'}
+                    onChange={e => setNuevaRegla(r => ({ ...r, tipo: e.target.value as any }))}
+                    className="w-full"
+                  >
+                    <option value="ambos">Ingresos y Gastos</option>
+                    <option value="ingreso">Solo Ingresos</option>
+                    <option value="gasto">Solo Gastos</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-400 text-xs block mb-1">Categoría destino</label>
+                  <select
+                    value={nuevaRegla.categoria_id || ''}
+                    onChange={e => setNuevaRegla(r => ({ ...r, categoria_id: Number(e.target.value) || null }))}
+                    className="w-full"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <optgroup label="Ingresos">
+                      {todasCategorias.filter(c => c.tipo === 'ingreso').map(c => (
+                        <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Gastos">
+                      {todasCategorias.filter(c => c.tipo === 'gasto').map(c => (
+                        <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-slate-400 text-xs">Prioridad:</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={nuevaRegla.prioridad ?? 0}
+                    onChange={e => setNuevaRegla(r => ({ ...r, prioridad: Number(e.target.value) }))}
+                    className="w-20 text-right"
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!nuevaRegla.patron?.trim() || !nuevaRegla.categoria_id) return
+                    await window.electronAPI.saveReglaCategorizacion(nuevaRegla)
+                    setNuevaRegla({ tipo_patron: 'contiene', tipo: 'ambos', prioridad: 0 })
+                    cargarReglas()
+                  }}
+                  disabled={!nuevaRegla.patron?.trim() || !nuevaRegla.categoria_id}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Plus size={14} /> Agregar regla
+                </button>
+              </div>
+            </div>
+
+            {/* Tabla de reglas existentes */}
+            {reglas.length === 0 ? (
+              <p className="text-slate-500 text-sm text-center py-8">No hay reglas definidas. Las reglas se aplican automáticamente al importar CSV.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-slate-400 border-b border-slate-700">
+                      <th className="text-left py-2 pr-3">Patrón</th>
+                      <th className="text-left py-2 px-3">Coincidencia</th>
+                      <th className="text-left py-2 px-3">Aplica a</th>
+                      <th className="text-left py-2 px-3">Categoría destino</th>
+                      <th className="text-center py-2 px-3">Prioridad</th>
+                      <th className="text-center py-2 pl-3">Activa</th>
+                      <th className="py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700/50">
+                    {reglas.map(r => (
+                      <tr key={r.id} className={`hover:bg-slate-700/20 ${!r.activo ? 'opacity-50' : ''}`}>
+                        <td className="py-2 pr-3 font-mono text-amber-300 text-xs">"{r.patron}"</td>
+                        <td className="py-2 px-3 text-slate-400 text-xs">
+                          {r.tipo_patron === 'contiene' ? 'Contiene' : 'Igual exacto'}
+                        </td>
+                        <td className="py-2 px-3 text-slate-400 text-xs capitalize">
+                          {r.tipo === 'ambos' ? 'Ambos' : r.tipo}
+                        </td>
+                        <td className="py-2 px-3">
+                          {r.categoria_nombre ? (
+                            <span className="text-white text-xs">
+                              {r.categoria_emoji ? `${r.categoria_emoji} ` : ''}{r.categoria_nombre}
+                              <span className="ml-1 text-slate-500 capitalize">({r.categoria_tipo})</span>
+                            </span>
+                          ) : <span className="text-slate-500 text-xs">—</span>}
+                        </td>
+                        <td className="py-2 px-3 text-center text-slate-300 text-xs font-mono">{r.prioridad}</td>
+                        <td className="py-2 px-3 text-center">
+                          <button
+                            onClick={async () => {
+                              await window.electronAPI.saveReglaCategorizacion({ ...r, activo: r.activo ? 0 : 1 })
+                              cargarReglas()
+                            }}
+                            className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${r.activo ? 'bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/40' : 'bg-slate-700 text-slate-500 border border-slate-600'}`}
+                            title={r.activo ? 'Desactivar' : 'Activar'}
+                          >
+                            {r.activo ? <Check size={12} /> : <X size={12} />}
+                          </button>
+                        </td>
+                        <td className="py-2 pl-3">
+                          <button
+                            onClick={async () => {
+                              if (!confirm('¿Eliminar esta regla?')) return
+                              await window.electronAPI.deleteReglaCategorizacion(r.id)
+                              cargarReglas()
+                            }}
+                            className="text-slate-500 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
       )}
     </div>
   )

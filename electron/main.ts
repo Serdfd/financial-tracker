@@ -1,6 +1,7 @@
 
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import { initDatabase } from './database/db'
 import { getCatalogo, saveCatalogo, deleteCatalogo } from './database/queries/catalogos'
 import { getMeses, getOrCreateMes, cerrarMes, getIngresosMes, saveIngresoMes, deleteIngresoMes, getGastosMes, saveGastoMes, deleteGastoMes, getDeudasTC, saveDeudaTC, deleteDeudaTC } from './database/queries/movimientos'
@@ -11,7 +12,8 @@ import { getDb } from './database/db'
 import { getParametros, saveParametro } from './database/queries/parametros'
 import { getPagosInmueble, savePagoInmueble, deletePagoInmueble, getResumenPortafolio } from './database/queries/inversiones'
 import { getPresupuestoCategorias, savePresupuestoCategoria, deletePresupuestoCategoria } from './database/queries/presupuesto'
-import { saveTransaccionDetalle, getTransaccionesMes, deleteTransaccionesMes } from './database/queries/transacciones'
+import { saveTransaccionDetalle, getTransaccionesMes, deleteTransaccionesMes, updateTransaccionCategoria, buscarTransacciones } from './database/queries/transacciones'
+import { getReglasCategorizacion, saveReglaCategorizacion, deleteReglaCategorizacion, aplicarReglasAMes } from './database/queries/reglas'
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -84,6 +86,14 @@ function registerIpcHandlers() {
   ipcMain.handle('saveTransaccionDetalle', (_e, data: any) => saveTransaccionDetalle(data))
   ipcMain.handle('getTransaccionesMes', (_e, mes_id: number) => getTransaccionesMes(mes_id))
   ipcMain.handle('deleteTransaccionesMes', (_e, mes_id: number) => deleteTransaccionesMes(mes_id))
+  ipcMain.handle('updateTransaccionCategoria', (_e, id: number, categoria_id: number | null) => updateTransaccionCategoria(id, categoria_id))
+  ipcMain.handle('buscarTransacciones', (_e, filtros: any) => buscarTransacciones(filtros))
+
+  // Reglas de categorización
+  ipcMain.handle('getReglasCategorizacion', () => getReglasCategorizacion())
+  ipcMain.handle('saveReglaCategorizacion', (_e, data: any) => saveReglaCategorizacion(data))
+  ipcMain.handle('deleteReglaCategorizacion', (_e, id: number) => deleteReglaCategorizacion(id))
+  ipcMain.handle('aplicarReglasAMes', (_e, mes_id: number) => aplicarReglasAMes(mes_id))
 
   // Deudas TC
   ipcMain.handle('getDeudasTC', (_, mes_id) => getDeudasTC(mes_id))
@@ -273,6 +283,21 @@ function registerIpcHandlers() {
       ultimos6Meses, ultimos12Meses,
       distribucionInversiones, distribucionTipos, distribucionRiesgo
     }
+  })
+
+  // Exportar CSV
+  ipcMain.handle('exportarCSV', async (_e, { filas, nombreSugerido }: { filas: string[][], nombreSugerido: string }) => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Exportar CSV',
+      defaultPath: nombreSugerido,
+      filters: [{ name: 'CSV', extensions: ['csv'] }]
+    })
+    if (canceled || !filePath) return { ok: false }
+    const contenido = filas.map(fila =>
+      fila.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')
+    ).join('\r\n')
+    fs.writeFileSync(filePath, '\uFEFF' + contenido, 'utf8') // BOM para Excel
+    return { ok: true, filePath }
   })
 
   // ── CUADRE MENSUAL ────────────────────────────────────

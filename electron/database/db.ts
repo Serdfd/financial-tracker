@@ -337,6 +337,17 @@ function migraciones() {
       db.run('INSERT INTO tipos_inversion (nombre) VALUES (?)', [nombre])
     }
   }
+
+  // Tabla de reglas de categorización
+  db.run(`CREATE TABLE IF NOT EXISTS reglas_categorizacion (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patron TEXT NOT NULL,
+    tipo_patron TEXT NOT NULL DEFAULT 'contiene',
+    tipo TEXT NOT NULL DEFAULT 'ambos',
+    categoria_id INTEGER REFERENCES categorias(id),
+    prioridad INTEGER DEFAULT 0,
+    activo INTEGER DEFAULT 1
+  )`)
 }
 
 function insertarSemilla() {

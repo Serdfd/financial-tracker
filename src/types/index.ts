@@ -249,6 +249,21 @@ export interface TRMResult {
   fecha?: string
 }
 
+// ── REGLAS DE CATEGORIZACIÓN ───────────────────────────
+export interface ReglaCategorizacion {
+  id: number
+  patron: string
+  tipo_patron: 'contiene' | 'igual'
+  tipo: 'ingreso' | 'gasto' | 'ambos'
+  categoria_id: number | null
+  prioridad: number
+  activo: number
+  categoria_nombre?: string
+  categoria_color?: string
+  categoria_emoji?: string
+  categoria_tipo?: string
+}
+
 // ── DASHBOARD ──────────────────────────────────────────
 export interface DashboardData {
   ingresos: number
@@ -299,9 +314,16 @@ declare global {
       getGastosMes: (mes_id: number) => Promise<GastoMes[]>
       saveGastoMes: (data: any) => Promise<void>
       deleteGastoMes: (id: number) => Promise<void>
-      saveTransaccionDetalle: (data: any) => Promise<void>
+      saveTransaccionDetalle: (data: any) => Promise<boolean>
       getTransaccionesMes: (mes_id: number) => Promise<TransaccionDetalle[]>
       deleteTransaccionesMes: (mes_id: number) => Promise<void>
+      updateTransaccionCategoria: (id: number, categoria_id: number | null) => Promise<void>
+      buscarTransacciones: (filtros: any) => Promise<TransaccionDetalle[]>
+      getReglasCategorizacion: () => Promise<ReglaCategorizacion[]>
+      saveReglaCategorizacion: (data: any) => Promise<void>
+      deleteReglaCategorizacion: (id: number) => Promise<void>
+      aplicarReglasAMes: (mes_id: number) => Promise<number>
+      exportarCSV: (payload: { filas: string[][], nombreSugerido: string }) => Promise<{ ok: boolean, filePath?: string }>
       getDeudasTC: (mes_id: number) => Promise<DeudaTC[]>
       saveDeudaTC: (data: any) => Promise<void>
       deleteDeudaTC: (id: number) => Promise<void>
