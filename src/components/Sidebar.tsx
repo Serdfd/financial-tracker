@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarCheck, TrendingUp,
-  Wallet, BarChart3, Settings, List, Search
+  Wallet, BarChart3, Settings, List
 } from 'lucide-react'
 
 const links = [
@@ -11,7 +11,6 @@ const links = [
   { to: '/inversiones',    icon: TrendingUp,      label: 'Inversiones'      },
   { to: '/presupuesto',    icon: Wallet,          label: 'Presupuesto'      },
   { to: '/transacciones',  icon: List,            label: 'Transacciones'    },
-  { to: '/busqueda',       icon: Search,          label: 'Búsqueda Global'  },
   { to: '/configuracion',  icon: Settings,        label: 'Configuración'    },
 ]
 

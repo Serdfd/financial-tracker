@@ -9,7 +9,6 @@ import { Analisis } from './pages/Analisis'
 import { Configuracion } from './pages/Configuracion'
 import { useAppStore } from './store/useAppStore'
 import { Transacciones } from './pages/Transacciones'
-import { BusquedaGlobal } from './pages/BusquedaGlobal'
 
 export default function App() {
   const cargarCatalogos = useAppStore(s => s.cargarCatalogos)
@@ -28,7 +27,6 @@ export default function App() {
         <Route path="/analisis"      element={<Analisis />}      />
         <Route path="/configuracion" element={<Configuracion />} />
         <Route path="/transacciones" element={<Transacciones />} />
-        <Route path="/busqueda" element={<BusquedaGlobal />} />
       </Route>
     </Routes>
   )
