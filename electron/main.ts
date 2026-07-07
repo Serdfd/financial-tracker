@@ -14,6 +14,7 @@ import { getPagosInmueble, savePagoInmueble, deletePagoInmueble, getResumenPorta
 import { getPresupuestoCategorias, savePresupuestoCategoria, deletePresupuestoCategoria } from './database/queries/presupuesto'
 import { saveTransaccionDetalle, getTransaccionesMes, deleteTransaccionesMes, updateTransaccionCategoria, buscarTransacciones } from './database/queries/transacciones'
 import { getReglasCategorizacion, saveReglaCategorizacion, deleteReglaCategorizacion, aplicarReglasAMes } from './database/queries/reglas'
+import { getMetas, saveMeta, deleteMeta, getMetaInversiones, setMetaInversiones, getAportesMeta, saveAporteMeta, deleteAporteMeta, getRendimientosMetaInversiones } from './database/queries/metas'
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -148,6 +149,17 @@ function registerIpcHandlers() {
 
   ipcMain.handle('getResumenPortafolio', () => getResumenPortafolio())
 
+  // Metas de ahorro
+  ipcMain.handle('getMetas', () => getMetas())
+  ipcMain.handle('saveMeta', (_e, data: any) => saveMeta(data))
+  ipcMain.handle('deleteMeta', (_e, id: number) => deleteMeta(id))
+  ipcMain.handle('getMetaInversiones', (_e, meta_id: number) => getMetaInversiones(meta_id))
+  ipcMain.handle('setMetaInversiones', (_e, meta_id: number, inversion_ids: number[]) => setMetaInversiones(meta_id, inversion_ids))
+  ipcMain.handle('getAportesMeta', (_e, meta_id: number) => getAportesMeta(meta_id))
+  ipcMain.handle('saveAporteMeta', (_e, data: any) => saveAporteMeta(data))
+  ipcMain.handle('deleteAporteMeta', (_e, id: number) => deleteAporteMeta(id))
+  ipcMain.handle('getRendimientosMetaInversiones', (_e, meta_id: number) => getRendimientosMetaInversiones(meta_id))
+
   // Dashboard
   ipcMain.handle('getDashboardData', (_, anio, mes) => {
     const db = getDb()
@@ -187,7 +199,7 @@ function registerIpcHandlers() {
       `SELECT COALESCE(SUM(im.rendimiento * mo.tasa_a_cop), 0) as total
        FROM inversion_mensual im JOIN inversiones inv ON im.inversion_id = inv.id
        LEFT JOIN monedas mo ON inv.moneda_id = mo.id
-       WHERE im.mes_id = ? AND (inv.es_cuenta = 0 OR inv.es_cuenta IS NULL)`, [mesActual.id]
+       WHERE im.mes_id = ? AND im.saldo_cierre > 0 AND (inv.es_cuenta = 0 OR inv.es_cuenta IS NULL)`, [mesActual.id]
     ))
     const rendimientos = rendimientosResult[0]?.total || 0
 

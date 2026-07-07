@@ -219,71 +219,65 @@ export function Transacciones() {
       {tab === 'busqueda' && (
         <>
           <Card>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
-              <div className="xl:col-span-2">
-                <label className="text-slate-400 text-xs block mb-1">Buscar en descripción, cuenta o categoría</label>
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={bTexto} onChange={e => setBTexto(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && buscarGlobal()}
-                    placeholder="Ej: Netflix, Almacenes Éxito, transferencia..." className="pl-8 w-full" />
-                </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Texto */}
+              <div className="relative flex-1 min-w-[180px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={bTexto} onChange={e => setBTexto(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && buscarGlobal()}
+                  placeholder="Buscar descripción, cuenta, categoría..." className="pl-8 w-full" />
               </div>
-              <div>
-                <label className="text-slate-400 text-xs block mb-1">Tipo</label>
-                <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700 w-fit">
-                  {(['todos', 'ingreso', 'gasto'] as const).map(t => (
-                    <button key={t} onClick={() => setBTipo(t)}
-                      className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${bTipo === t ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white'}`}>
-                      {t === 'todos' ? 'Todos' : t === 'ingreso' ? '💰 Ingresos' : '💸 Gastos'}
-                    </button>
-                  ))}
-                </div>
+
+              {/* Tipo */}
+              <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700 shrink-0">
+                {(['todos', 'ingreso', 'gasto'] as const).map(t => (
+                  <button key={t} onClick={() => setBTipo(t)}
+                    className={`px-2.5 py-1.5 rounded text-xs font-medium transition-all ${bTipo === t ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white'}`}>
+                    {t === 'todos' ? 'Todos' : t === 'ingreso' ? '💰 Ing.' : '💸 Gas.'}
+                  </button>
+                ))}
               </div>
-              <div>
-                <label className="text-slate-400 text-xs block mb-1">Categoría</label>
-                <select value={bCategoria} onChange={e => setBCategoria(e.target.value ? Number(e.target.value) : '')} className="w-56">
-                  <option value="">Todas las categorías</option>
-                  <optgroup label="Ingresos">
-                    {categorias.filter(c => c.tipo === 'ingreso').map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
-                  </optgroup>
-                  <optgroup label="Gastos">
-                    {categorias.filter(c => c.tipo === 'gasto').map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
-                  </optgroup>
-                </select>
-              </div>
-              <div>
-                <label className="text-slate-400 text-xs block mb-1">Desde</label>
-                <div className="flex items-center gap-2">
-                  <select value={bMesDesde} onChange={e => setBMesDesde(e.target.value ? Number(e.target.value) : '')} className="w-36">
-                    <option value="">Mes...</option>
-                    {MESES_NOMBRES.slice(1).map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
-                  </select>
-                  <select value={bAnioDesde} onChange={e => setBAnioDesde(e.target.value ? Number(e.target.value) : '')} className="w-24">
-                    <option value="">Año...</option>
-                    {anios.map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-slate-400 text-xs block mb-1">Hasta</label>
-                <div className="flex items-center gap-2">
-                  <select value={bMesHasta} onChange={e => setBMesHasta(e.target.value ? Number(e.target.value) : '')} className="w-36">
-                    <option value="">Mes...</option>
-                    {MESES_NOMBRES.slice(1).map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
-                  </select>
-                  <select value={bAnioHasta} onChange={e => setBAnioHasta(e.target.value ? Number(e.target.value) : '')} className="w-24">
-                    <option value="">Año...</option>
-                    {anios.map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
-              </div>
+
+              {/* Categoría */}
+              <select value={bCategoria} onChange={e => setBCategoria(e.target.value ? Number(e.target.value) : '')} className="w-44 shrink-0">
+                <option value="">Categoría...</option>
+                <optgroup label="Ingresos">
+                  {categorias.filter(c => c.tipo === 'ingreso').map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
+                </optgroup>
+                <optgroup label="Gastos">
+                  {categorias.filter(c => c.tipo === 'gasto').map(c => <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ''}{c.nombre}</option>)}
+                </optgroup>
+              </select>
+
+              {/* Desde */}
+              <span className="text-slate-400 text-xs shrink-0">Desde</span>
+              <select value={bMesDesde} onChange={e => setBMesDesde(e.target.value ? Number(e.target.value) : '')} className="w-28 shrink-0">
+                <option value="">Mes...</option>
+                {MESES_NOMBRES.slice(1).map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
+              </select>
+              <select value={bAnioDesde} onChange={e => setBAnioDesde(e.target.value ? Number(e.target.value) : '')} className="w-20 shrink-0">
+                <option value="">Año...</option>
+                {anios.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+
+              {/* Hasta */}
+              <span className="text-slate-400 text-xs shrink-0">Hasta</span>
+              <select value={bMesHasta} onChange={e => setBMesHasta(e.target.value ? Number(e.target.value) : '')} className="w-28 shrink-0">
+                <option value="">Mes...</option>
+                {MESES_NOMBRES.slice(1).map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
+              </select>
+              <select value={bAnioHasta} onChange={e => setBAnioHasta(e.target.value ? Number(e.target.value) : '')} className="w-20 shrink-0">
+                <option value="">Año...</option>
+                {anios.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+
+              {/* Botón */}
+              <button onClick={buscarGlobal} disabled={bBuscando}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 shrink-0">
+                <Search size={14} />
+                {bBuscando ? 'Buscando...' : 'Buscar'}
+              </button>
             </div>
-            <button onClick={buscarGlobal} disabled={bBuscando}
-              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
-              <Search size={14} />
-              {bBuscando ? 'Buscando...' : 'Buscar'}
-            </button>
           </Card>
 
           {bBuscado && (

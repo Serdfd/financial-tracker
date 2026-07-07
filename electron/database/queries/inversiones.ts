@@ -98,7 +98,7 @@ export function getInversionMensual(inversion_id: number): any[] {
     `SELECT im.*, m.anio, m.mes
      FROM inversion_mensual im
      JOIN meses m ON im.mes_id = m.id
-     WHERE im.inversion_id = ?
+     WHERE im.inversion_id = ? AND im.saldo_cierre > 0
      ORDER BY m.anio, m.mes`,
     [inversion_id]
   ))
@@ -124,11 +124,23 @@ export function getInversionMensualMes(mes_id: number): any[] {
 export function saveInversionMensual(data: any): void {
   const db = getDb()
 
+  const saldo = data.saldo_cierre || 0
+  const aportes = data.aportes || 0
+  const retiros = data.retiros || 0
+
+  // Si no hay ningún dato real, borrar la fila si existía y salir
+  if (saldo === 0 && aportes === 0 && retiros === 0) {
+    db.run(
+      `DELETE FROM inversion_mensual WHERE inversion_id = ? AND mes_id = ?`,
+      [data.inversion_id, data.mes_id]
+    )
+    guardarDb()
+    return
+  }
+
   const mesActual = rowsToObjects(db.exec(
     'SELECT anio, mes FROM meses WHERE id = ?', [data.mes_id]
   ))[0]
-
-  console.log('mesActual:', mesActual)
 
   let saldoAnterior = 0
   if (mesActual) {
@@ -137,14 +149,20 @@ export function saveInversionMensual(data: any): void {
        JOIN meses m ON im.mes_id = m.id
        WHERE im.inversion_id = ?
          AND (m.anio * 12 + m.mes) < (? * 12 + ?)
+         AND im.saldo_cierre > 0
        ORDER BY m.anio DESC, m.mes DESC LIMIT 1`,
       [data.inversion_id, mesActual.anio, mesActual.mes]
     ))
     saldoAnterior = mesAnteriorResult[0]?.saldo_cierre || 0
   }
 
-  const rendimiento = data.saldo_cierre - saldoAnterior - (data.aportes || 0) + (data.retiros || 0)
-  const rentabilidad_pct = saldoAnterior > 0 ? (rendimiento / saldoAnterior) * 100 : 0
+  // Solo calcular rendimiento si hay saldo de cierre real
+  const rendimiento = saldo > 0
+    ? saldo - saldoAnterior - aportes + retiros
+    : 0
+  const rentabilidad_pct = (saldo > 0 && saldoAnterior > 0)
+    ? (rendimiento / saldoAnterior) * 100
+    : 0
 
   db.run(
     `INSERT INTO inversion_mensual (inversion_id, mes_id, saldo_cierre, aportes, retiros, rendimiento, rentabilidad_pct)
@@ -155,8 +173,7 @@ export function saveInversionMensual(data: any): void {
        retiros=excluded.retiros,
        rendimiento=excluded.rendimiento,
        rentabilidad_pct=excluded.rentabilidad_pct`,
-    [data.inversion_id, data.mes_id, data.saldo_cierre,
-     data.aportes || 0, data.retiros || 0, rendimiento, rentabilidad_pct]
+    [data.inversion_id, data.mes_id, saldo, aportes, retiros, rendimiento, rentabilidad_pct]
   )
   guardarDb()
 }
@@ -383,10 +400,10 @@ export function getResumenPortafolio(): any[] {
        r.color as riesgo_color,
        mo.codigo as moneda_codigo,
        mo.tasa_a_cop,
-       -- Saldo actual (último mes)
+       -- Saldo actual (último mes con saldo real)
        (SELECT im.saldo_cierre FROM inversion_mensual im
         JOIN meses m ON im.mes_id = m.id
-        WHERE im.inversion_id = inv.id
+        WHERE im.inversion_id = inv.id AND im.saldo_cierre > 0
         ORDER BY m.anio DESC, m.mes DESC LIMIT 1) as saldo_actual,
        -- Saldo inicial (primer mes = mes 0)
        (SELECT im.saldo_cierre FROM inversion_mensual im
@@ -406,11 +423,11 @@ export function getResumenPortafolio(): any[] {
        -- Retiros acumulados
        (SELECT COALESCE(SUM(im.retiros), 0) FROM inversion_mensual im
         WHERE im.inversion_id = inv.id) as retiros_acumulados,
-       -- Rendimiento acumulado
+       -- Rendimiento acumulado (solo meses con saldo cierre real)
        (SELECT COALESCE(SUM(im.rendimiento), 0) FROM inversion_mensual im
-        WHERE im.inversion_id = inv.id) as rendimiento_acumulado,
-       -- Meses con datos
-       (SELECT COUNT(*) FROM inversion_mensual im WHERE im.inversion_id = inv.id) as meses_registrados
+        WHERE im.inversion_id = inv.id AND im.saldo_cierre > 0) as rendimiento_acumulado,
+       -- Meses con datos reales (con saldo cierre)
+       (SELECT COUNT(*) FROM inversion_mensual im WHERE im.inversion_id = inv.id AND im.saldo_cierre > 0) as meses_registrados
      FROM inversiones inv
      LEFT JOIN entidades e ON inv.entidad_id = e.id
      LEFT JOIN tipos_inversion t ON inv.tipo_id = t.id

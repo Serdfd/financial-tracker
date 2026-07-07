@@ -249,6 +249,32 @@ export interface TRMResult {
   fecha?: string
 }
 
+// ── METAS DE AHORRO ───────────────────────────────────
+export interface MetaAhorro {
+  id: number
+  nombre: string
+  descripcion?: string
+  fecha_inicio: string
+  fecha_fin?: string
+  periodicidad: 'mensual' | 'quincenal'
+  monto_periodo: number
+  activo: number
+}
+
+export interface AporteMeta {
+  id: number
+  meta_id: number
+  fecha: string
+  monto: number
+  notas?: string
+}
+
+export interface MetaInversionVinculada {
+  inversion_id: number
+  nombre: string
+  entidad_nombre?: string
+}
+
 // ── REGLAS DE CATEGORIZACIÓN ───────────────────────────
 export interface ReglaCategorizacion {
   id: number
@@ -360,6 +386,15 @@ declare global {
       saveParametro: (clave: string, valor: string) => Promise<void>
       getResumenPortafolio: () => Promise<ResumenPortafolio[]>
       getCuadreMensual: (anio: number, mes: number) => Promise<any>
+      getMetas: () => Promise<MetaAhorro[]>
+      saveMeta: (data: any) => Promise<void>
+      deleteMeta: (id: number) => Promise<void>
+      getMetaInversiones: (meta_id: number) => Promise<MetaInversionVinculada[]>
+      setMetaInversiones: (meta_id: number, inversion_ids: number[]) => Promise<void>
+      getAportesMeta: (meta_id: number) => Promise<AporteMeta[]>
+      saveAporteMeta: (data: any) => Promise<void>
+      deleteAporteMeta: (id: number) => Promise<void>
+      getRendimientosMetaInversiones: (meta_id: number) => Promise<number>
     }
   }
 }

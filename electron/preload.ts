@@ -96,4 +96,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getResumenPortafolio: () => ipcRenderer.invoke('getResumenPortafolio'),
 
   getCuadreMensual: (anio: number, mes: number) => ipcRenderer.invoke('getCuadreMensual', anio, mes),
+
+  // Metas de ahorro
+  getMetas: () => ipcRenderer.invoke('getMetas'),
+  saveMeta: (data: any) => ipcRenderer.invoke('saveMeta', data),
+  deleteMeta: (id: number) => ipcRenderer.invoke('deleteMeta', id),
+  getMetaInversiones: (meta_id: number) => ipcRenderer.invoke('getMetaInversiones', meta_id),
+  setMetaInversiones: (meta_id: number, inversion_ids: number[]) => ipcRenderer.invoke('setMetaInversiones', meta_id, inversion_ids),
+  getAportesMeta: (meta_id: number) => ipcRenderer.invoke('getAportesMeta', meta_id),
+  saveAporteMeta: (data: any) => ipcRenderer.invoke('saveAporteMeta', data),
+  deleteAporteMeta: (id: number) => ipcRenderer.invoke('deleteAporteMeta', id),
+  getRendimientosMetaInversiones: (meta_id: number) => ipcRenderer.invoke('getRendimientosMetaInversiones', meta_id),
 })

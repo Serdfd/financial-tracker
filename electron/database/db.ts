@@ -348,6 +348,38 @@ function migraciones() {
     prioridad INTEGER DEFAULT 0,
     activo INTEGER DEFAULT 1
   )`)
+
+  // Limpiar filas de inversion_mensual con datos corruptos (saldo_cierre=0 con rendimiento calculado mal)
+  db.run(`UPDATE inversion_mensual SET rendimiento = 0, rentabilidad_pct = 0 WHERE saldo_cierre = 0`)
+  // Eliminar filas vacías (sin saldo, sin aportes, sin retiros)
+  db.run(`DELETE FROM inversion_mensual WHERE saldo_cierre = 0 AND aportes = 0 AND retiros = 0`)
+
+  // Metas de ahorro
+  db.run(`CREATE TABLE IF NOT EXISTS metas_ahorro (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL,
+    descripcion TEXT,
+    fecha_inicio TEXT NOT NULL,
+    fecha_fin TEXT,
+    periodicidad TEXT NOT NULL DEFAULT 'mensual',
+    monto_periodo REAL NOT NULL,
+    activo INTEGER DEFAULT 1
+  )`)
+
+  db.run(`CREATE TABLE IF NOT EXISTS meta_inversiones (
+    meta_id INTEGER NOT NULL REFERENCES metas_ahorro(id),
+    inversion_id INTEGER NOT NULL REFERENCES inversiones(id),
+    PRIMARY KEY (meta_id, inversion_id)
+  )`)
+
+  db.run(`CREATE TABLE IF NOT EXISTS aportes_meta (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    meta_id INTEGER NOT NULL REFERENCES metas_ahorro(id),
+    fecha TEXT NOT NULL,
+    monto REAL NOT NULL,
+    notas TEXT,
+    UNIQUE(meta_id, fecha)
+  )`)
 }
 
 function insertarSemilla() {

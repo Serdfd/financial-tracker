@@ -175,6 +175,46 @@ export function Analisis() {
   }
   const lineCatSeries = [{ name: catSeleccionadaInfo?.nombre || '', data: datosCategoria }]
 
+  // ── TASA DE AHORRO E INSIGHTS ──
+  const tasasAhorroMes = filas.map(f =>
+    f.ingresos > 0 ? Number(((f.ingresos - f.gastos) / f.ingresos * 100).toFixed(1)) : 0
+  )
+  const tasaAhorroPromedio = filas.length > 0
+    ? tasasAhorroMes.reduce((s, t) => s + t, 0) / filas.length : 0
+  const mejorMesAhorroIdx = tasasAhorroMes.length > 0
+    ? tasasAhorroMes.indexOf(Math.max(...tasasAhorroMes)) : -1
+  const peorMesAhorroIdx = tasasAhorroMes.length > 0
+    ? tasasAhorroMes.indexOf(Math.min(...tasasAhorroMes)) : -1
+  const mesesPositivos = filas.filter(f => f.crecimientoNeto >= 0).length
+  const hoyAnio = new Date().getFullYear()
+  const hoyMes = new Date().getMonth() + 1
+  const filasPatrimonio = filas.filter(f => !(f.anio === hoyAnio && f.mes === hoyMes))
+  const crecPatrimonioPct = filasPatrimonio.length >= 2 && filasPatrimonio[0].patrimonio > 0
+    ? ((filasPatrimonio[filasPatrimonio.length - 1].patrimonio - filasPatrimonio[0].patrimonio) / filasPatrimonio[0].patrimonio) * 100 : 0
+  const mitad = Math.floor(filas.length / 2)
+  const ratioGastos1 = mitad > 0
+    ? filas.slice(0, mitad).reduce((s, f) => s + (f.ingresos > 0 ? f.gastos / f.ingresos : 0), 0) / mitad : 0
+  const ratioGastos2 = filas.length - mitad > 0
+    ? filas.slice(mitad).reduce((s, f) => s + (f.ingresos > 0 ? f.gastos / f.ingresos : 0), 0) / (filas.length - mitad) : 0
+  const tendenciaGastosPp = (ratioGastos2 - ratioGastos1) * 100
+
+  const savingsRateOptions: ApexCharts.ApexOptions = {
+    chart: { type: 'bar', background: 'transparent', toolbar: { show: false } },
+    colors: tasasAhorroMes.map(t => t >= 20 ? '#22c55e' : t >= 0 ? '#f59e0b' : '#ef4444'),
+    plotOptions: { bar: { borderRadius: 4, distributed: true } },
+    dataLabels: { enabled: false },
+    legend: { show: false },
+    annotations: {
+      yaxis: [{ y: 20, borderColor: '#6366f1', strokeDashArray: 4,
+        label: { text: 'Meta 20%', style: { color: '#6366f1', background: '#1e293b' } } }]
+    },
+    xaxis: { categories: ejeX, labels: { style: { colors: '#94a3b8' } } },
+    yaxis: { labels: { style: { colors: '#94a3b8' }, formatter: (v) => `${Number(v).toFixed(0)}%` } },
+    grid: { borderColor: '#334155' },
+    tooltip: { theme: 'dark', y: { formatter: (v) => `${Number(v).toFixed(1)}%` } },
+  }
+  const savingsRateSeries = [{ name: 'Tasa de ahorro', data: tasasAhorroMes }]
+
   // ── GRÁFICAS PORTAFOLIO ──
   const portafolioOrdenado = [...portafolio].sort((a, b) => {
       const mesesA = Math.max(a.meses_registrados - 1, 1)
@@ -298,6 +338,77 @@ export function Analisis() {
           </Card>
         ) : (
           <div className="space-y-6">
+
+            {/* ── DIAGNÓSTICO ── */}
+            <Card>
+              <h3 className="text-white font-semibold mb-4">Diagnóstico del período</h3>
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-slate-900 rounded-lg p-3">
+                  <p className="text-slate-400 text-xs mb-1">Tasa de ahorro promedio</p>
+                  <p className={`text-2xl font-bold font-mono ${tasaAhorroPromedio >= 20 ? 'text-green-400' : tasaAhorroPromedio >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
+                    {tasaAhorroPromedio.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="bg-slate-900 rounded-lg p-3">
+                  <p className="text-slate-400 text-xs mb-1">Meses con crecimiento positivo</p>
+                  <p className="text-2xl font-bold font-mono text-white">
+                    {mesesPositivos} <span className="text-base text-slate-400">/ {filas.length}</span>
+                  </p>
+                </div>
+                <div className="bg-slate-900 rounded-lg p-3">
+                  <p className="text-slate-400 text-xs mb-1">Crecimiento del patrimonio</p>
+                  <p className={`text-2xl font-bold font-mono ${crecPatrimonioPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {crecPatrimonioPct >= 0 ? '+' : ''}{crecPatrimonioPct.toFixed(1)}%
+                  </p>
+                  {filasPatrimonio.length < filas.length && filasPatrimonio.length > 0 && (
+                    <p className="text-slate-500 text-xs mt-1">hasta {MESES_NOMBRES[filasPatrimonio[filasPatrimonio.length - 1].mes].slice(0, 3)}</p>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2.5 border-t border-slate-700 pt-4">
+                {mejorMesAhorroIdx >= 0 && (
+                  <div className="flex items-start gap-2.5 text-sm">
+                    <span>🏆</span>
+                    <p className="text-slate-300">Mejor mes de ahorro: <span className="text-green-400 font-medium">{MESES_NOMBRES[filas[mejorMesAhorroIdx].mes]} {filas[mejorMesAhorroIdx].anio}</span> — guardaste el <span className="text-green-400 font-mono font-bold">{tasasAhorroMes[mejorMesAhorroIdx].toFixed(1)}%</span> de tus ingresos.</p>
+                  </div>
+                )}
+                {peorMesAhorroIdx >= 0 && peorMesAhorroIdx !== mejorMesAhorroIdx && (
+                  <div className="flex items-start gap-2.5 text-sm">
+                    <span>{tasasAhorroMes[peorMesAhorroIdx] < 0 ? '🔴' : '⚠️'}</span>
+                    <p className="text-slate-300">Peor mes de ahorro: <span className="text-red-400 font-medium">{MESES_NOMBRES[filas[peorMesAhorroIdx].mes]} {filas[peorMesAhorroIdx].anio}</span> — solo guardaste el <span className="text-red-400 font-mono font-bold">{tasasAhorroMes[peorMesAhorroIdx].toFixed(1)}%</span>{tasasAhorroMes[peorMesAhorroIdx] < 0 ? ' (gastos superaron ingresos)' : ''}.</p>
+                  </div>
+                )}
+                {filas.length >= 4 && (
+                  <div className="flex items-start gap-2.5 text-sm">
+                    <span>{tendenciaGastosPp > 5 ? '⚠️' : tendenciaGastosPp < -5 ? '✅' : 'ℹ️'}</span>
+                    <p className="text-slate-300">
+                      {tendenciaGastosPp > 5
+                        ? <><span className="text-amber-400 font-semibold">Los gastos crecieron {tendenciaGastosPp.toFixed(1)}pp</span> como % de tus ingresos en la segunda mitad del período — monitorea esta tendencia.</>
+                        : tendenciaGastosPp < -5
+                        ? <><span className="text-green-400 font-semibold">Los gastos bajaron {Math.abs(tendenciaGastosPp).toFixed(1)}pp</span> como % de tus ingresos en la segunda mitad — vas mejorando.</>
+                        : <>La relación gastos/ingresos se mantiene <span className="text-slate-200 font-semibold">estable</span> en el período.</>
+                      }
+                    </p>
+                  </div>
+                )}
+                {topCategorias.length > 0 && filas.reduce((s, f) => s + f.ingresos, 0) > 0 && (
+                  <div className="flex items-start gap-2.5 text-sm">
+                    <span>💸</span>
+                    <p className="text-slate-300">
+                      Mayor categoría de gasto: <span className="text-white font-medium">{topCategorias[0].emoji ? `${topCategorias[0].emoji} ` : ''}{topCategorias[0].nombre}</span>{' '}
+                      — el <span className="text-amber-400 font-mono font-bold">{((topCategorias[0].total / filas.reduce((s, f) => s + f.ingresos, 0)) * 100).toFixed(1)}%</span> de tus ingresos del período.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Tasa de ahorro mensual */}
+            <Card>
+              <h3 className="text-white font-semibold mb-4">Tasa de ahorro mensual</h3>
+              <ReactApexChart options={savingsRateOptions} series={savingsRateSeries} type="bar" height={220} />
+            </Card>
+
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <Card>
                 <h3 className="text-white font-semibold mb-4">Tendencia de Ingresos, Gastos y Rendimientos</h3>
@@ -508,7 +619,9 @@ export function Analisis() {
           )}
 
           {/* Gráficas comparativas */}
-          {portafolio.length > 0 && (
+          {portafolio.length > 0 && (() => {
+            const alturaComparativa = Math.max(300, portafolio.length * 45)
+            return (
             <div className="grid grid-cols-2 gap-4">
               <Card>
                 <h3 className="text-white font-semibold mb-4">Rentabilidad anualizada % por inversión</h3>
@@ -550,14 +663,15 @@ export function Analisis() {
                       return { x: p.nombre, y: Number(rentAnual.toFixed(2)) }
                     })
                   }]}
-                  type="bar" height={Math.max(200, portafolio.length * 45)} />
+                  type="bar" height={alturaComparativa} />
               </Card>
               <Card>
                 <h3 className="text-white font-semibold mb-4">Distribución del portafolio</h3>
-                <ReactApexChart options={pieOptions} series={pieSeries} type="donut" height={300} />
+                <ReactApexChart options={pieOptions} series={pieSeries} type="donut" height={alturaComparativa} />
               </Card>
             </div>
-          )}
+            )
+          })()}
         </div>
       )}
 

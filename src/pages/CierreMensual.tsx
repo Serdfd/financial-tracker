@@ -577,10 +577,10 @@ export function CierreMensual() {
                             className="w-full text-right" placeholder="0" />
                         </td>
                         <td className={`py-2 px-2 text-right font-mono font-medium ${im.rendimiento >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {esCuenta ? <span className="text-slate-600">—</span> : formatCOP(im.rendimiento || 0)}
+                          {(esCuenta || !im.saldo_cierre) ? <span className="text-slate-600">—</span> : formatCOP(im.rendimiento || 0)}
                         </td>
                         <td className={`py-2 pl-2 text-right font-mono ${im.rentabilidad_pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {esCuenta ? <span className="text-slate-600">—</span> : formatPct(im.rentabilidad_pct || 0)}
+                          {(esCuenta || !im.saldo_cierre) ? <span className="text-slate-600">—</span> : formatPct(im.rentabilidad_pct || 0)}
                         </td>
                       </tr>
                     )
